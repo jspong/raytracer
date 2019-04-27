@@ -15,7 +15,10 @@ class Vec3(collections.namedtuple('Vec3', 'x y z')):
     return self + (-1 * other)
 
   def __mul__(self, scale):
-    return Vec3(self.x * scale, self.y * scale, self.z * scale)
+    if isinstance(scale, Vec3):
+      return Vec3(self.x * scale.x, self.y * scale.y, self.z * scale.z)
+    else:
+      return Vec3(self.x * scale, self.y * scale, self.z * scale)
 
   def __rmul__(self, scale):
     return self * scale
@@ -89,17 +92,21 @@ def lerp(a, b, t):
   return (1 - t) * a + t * b
 
 
-def color(ray, hitable):
+def color(ray, hitable, depth=0):
   record = hitable.hit(ray, 0.001, 100000)
   if record is None:
     t = 0.5 * (ray.direction.as_unit().y + 1.0)
     return lerp(Color.white(), Vec3(0.5, 0.7, 1.0), t)
   else:
-    target = record.pos + record.normal + random_in_unit_sphere()
-    return 0.5 * color(Ray(record.pos, target - record.pos), hitable)
+    if depth > 50:
+      return Vec3.zero()
+    scattered, attenuation = record.material.scatter(ray, record)
+    if scattered is None:
+      return Vec3.zero()
+    return attenuation * color(scattered, hitable, depth + 1)
 
 
-HitRecord = collections.namedtuple('HitRecord', 't pos normal')
+HitRecord = collections.namedtuple('HitRecord', 't pos normal material')
 
 class Hitable(object):
  
@@ -112,9 +119,10 @@ class Hitable(object):
 
 class Sphere(Hitable):
 
-  def __init__(self, center, radius):
+  def __init__(self, center, radius, material):
     self._center = center
     self._radius = radius
+    self._material = material
   
   def hit(self, ray, t_min, t_max):
     oc = ray.origin - self._center
@@ -126,7 +134,7 @@ class Sphere(Hitable):
       t = (-b - math.sqrt(discriminant)) / a
       if t < t_max and t > t_min:
         point = ray.point_at(t)
-        return HitRecord(t, point, (point - self._center) / self._radius)
+        return HitRecord(t, point, (point - self._center) / self._radius, self._material)
     return None
 
 class HitableList(Hitable):
@@ -163,6 +171,41 @@ def random_in_unit_sphere():
       return p
 
 
+class Material(object):
+
+  __metaclass__ = abc.ABCMeta
+
+  @abc.abstractmethod
+  def scatter(self, ray, hit_record):
+    "Return the attenuation and scattered ray, or None if it is absorbed"
+
+
+class Lambertian(Material):
+
+  def __init__(self, albedo):
+    self._albedo = albedo
+
+  def scatter(self, ray, hit_record):
+    target = hit_record.pos + hit_record.normal + random_in_unit_sphere()
+    scattered = Ray(hit_record.pos, target - hit_record.pos)
+    return scattered, self._albedo
+
+def reflect(vector, normal):
+  return vector - 2 * dot(vector, normal) * normal
+
+
+class Metal(Material):
+  def __init__(self, albedo):
+    self._albedo = albedo
+
+  def scatter(self, ray, hit_record):
+    reflected = reflect(ray.direction.as_unit(), hit_record.normal)
+    scattered = Ray(hit_record.pos, reflected)
+    if dot(scattered.direction, hit_record.normal) > 0:
+      return scattered, self._albedo
+    return None, None
+    
+
 def main():
   width, height = 200, 100
   samples = 10
@@ -172,8 +215,12 @@ def main():
 
   camera = Camera(Vec3(-2.0, -1.0, -1.0), 4 * Vec3.right(), 2 * Vec3.up(), Vec3.zero())
 
-  objects = HitableList([Sphere(Vec3(0,0,-1), 0.5),
-                         Sphere(Vec3(0, -100.5, -1),100)])
+  objects = HitableList([
+     Sphere(Vec3(0,0,-1), 0.5, Lambertian(Vec3(0.8, 0.3, 0.3))),
+     Sphere(Vec3(0, -100.5, -1), 100, Lambertian(Vec3(0.8, 0.8, 0.0))),
+     Sphere(Vec3(1, 0, -1), 0.5, Metal(Vec3(0.8, 0.6, 0.2))),
+     Sphere(Vec3(-1, 0, -1), 0.5, Metal(Vec3(0.8, 0.8, 0.8)))
+  ])
   for y in range(height-1, -1, -1):
     for x in range(width):
       c = Vec3.zero()
