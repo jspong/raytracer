@@ -139,16 +139,24 @@ class HitableList(Hitable):
       record = this_record
     return record
  
+class Camera(object):
+  def __init__(self, lower_left, horizontal, vertical, origin):
+    self._lower_left = lower_left
+    self._horizontal = horizontal
+    self._vertical = vertical
+    self._origin = origin
+
+  def get_ray(self, u, v):
+    return Ray(self._origin, self._lower_left + u * self._horizontal + v * self._vertical - origin)
+
+
 def main():
   width, height = 200, 100
   print("P3")
   print(width, height)
   print(255)
 
-  lower_left = Vec3(-2.0, -1.0, -1.0)
-  horizontal = 4 * Vec3.right()
-  vertical = 2 * Vec3.up()
-  origin = Vec3.zero()
+  camera = Camera(Vec3(-2.0, -1.0, -1.0, 4 * Vec3.right(), 2 * Vec3.up(), Vec3.zero())
 
   objects = HitableList([Sphere(Vec3(0,0,-1), 0.5),
                          Sphere(Vec3(0, -100.5, -1),100)])
@@ -156,7 +164,7 @@ def main():
     for x in range(width):
       u = x / width
       v = y / height
-      r = Ray(origin, lower_left + u * horizontal + v * vertical)
+      r = camera.get_ray(u, v)
       print(255.9 * color(r, objects))
 
 
