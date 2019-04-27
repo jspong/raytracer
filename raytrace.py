@@ -198,12 +198,13 @@ def reflect(vector, normal):
 
 
 class Metal(Material):
-  def __init__(self, albedo):
+  def __init__(self, albedo, fuzz):
     self._albedo = albedo
+    self._fuzz = fuzz
 
   def scatter(self, ray, hit_record):
     reflected = reflect(ray.direction.as_unit(), hit_record.normal)
-    scattered = Ray(hit_record.pos, reflected)
+    scattered = Ray(hit_record.pos, reflected + self._fuzz * random_in_unit_sphere())
     if dot(scattered.direction, hit_record.normal) > 0:
       return scattered, self._albedo
     return None, None
@@ -260,9 +261,8 @@ def main():
   objects = HitableList([
      Sphere(Vec3(0,0,-1), 0.5, Lambertian(Vec3(0.8, 0.3, 0.3))),
      Sphere(Vec3(0, -100.5, -1), 100, Lambertian(Vec3(0.8, 0.8, 0.0))),
-     Sphere(Vec3(1, 0, -1), 0.5, Metal(Vec3(0.8, 0.6, 0.2))),
-     Sphere(Vec3(-1, 0, -1), 0.5, Dialectric(1.5)),
-     #Sphere(Vec3(-1, 0, -1), -0.45, Dialectric(1.5))
+     Sphere(Vec3(1, 0, -1), 0.5, Metal(Vec3(0.8, 0.6, 0.2), 0.3)),
+     Sphere(Vec3(-1, 0, -1), 0.5, Metal(Vec3(0.8, 0.8, 0.8), 1.0))
   ])
 
   for y in range(height-1, -1, -1):
