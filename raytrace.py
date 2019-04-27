@@ -23,6 +23,9 @@ class Vec3(collections.namedtuple('Vec3', 'x y z')):
   def __rmul__(self, scale):
     return self * scale
 
+  def __neg__(self):
+    return self * -1
+
   def __truediv__(self, scale):
     return self * (1 / scale)
 
@@ -204,10 +207,49 @@ class Metal(Material):
     if dot(scattered.direction, hit_record.normal) > 0:
       return scattered, self._albedo
     return None, None
+
+
+def refract(vector, normal, ni_over_nt):
+  uv = vector.as_unit()
+  dt = dot(uv, normal)
+  discriminant = 1.0 - ni_over_nt * ni_over_nt * (1 - dt * dt)
+  if discriminant > 0:
+    return ni_over_nt * (uv - normal * dt) - normal * math.sqrt(discriminant)
+  else:
+    return None
+
+def schlick(cosine, ref_idx):
+  r0 = (1 - ref_idx) / (1 + ref_idx)
+  r0 *= r0
+  return r0 + (1-r0) * ((1 - cosine) ** 5)
+
+class Dialectric(Material):
+  def __init__(self, refraction):
+    self._refraction = refraction
+
+  def scatter(self, ray, hit_record):
+    if dot(ray.direction, hit_record.normal) > 0:
+      outward_normal = -hit_record.normal
+      ni_over_nt = self._refraction
+      cosine = self._refraction * dot(ray.direction, hit_record.normal) / ray.direction.length
+    else:
+      outward_normal = hit_record.normal
+      ni_over_nt = 1 / self._refraction
+      cosine = -dot(ray.direction, hit_record.normal) / ray.direction.length
+    refracted = refract(ray.direction, outward_normal, ni_over_nt)
+    if refracted:
+      reflect_prob = schlick(cosine, self._refraction)
+    else:
+      reflect_prob = 1.0
+    if random.random() < reflect_prob:
+      reflected = reflect(ray.direction, hit_record.normal)
+      return Ray(hit_record.pos, reflected), Color.white()
+    else:
+      return Ray(hit_record.pos, refracted), Color.white()
     
 
 def main():
-  width, height = 200, 100
+  width, height = 400, 200
   samples = 10
   print("P3")
   print(width, height)
@@ -219,8 +261,10 @@ def main():
      Sphere(Vec3(0,0,-1), 0.5, Lambertian(Vec3(0.8, 0.3, 0.3))),
      Sphere(Vec3(0, -100.5, -1), 100, Lambertian(Vec3(0.8, 0.8, 0.0))),
      Sphere(Vec3(1, 0, -1), 0.5, Metal(Vec3(0.8, 0.6, 0.2))),
-     Sphere(Vec3(-1, 0, -1), 0.5, Metal(Vec3(0.8, 0.8, 0.8)))
+     Sphere(Vec3(-1, 0, -1), 0.5, Dialectric(1.5)),
+     #Sphere(Vec3(-1, 0, -1), -0.45, Dialectric(1.5))
   ])
+
   for y in range(height-1, -1, -1):
     for x in range(width):
       c = Vec3.zero()
