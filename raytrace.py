@@ -147,7 +147,7 @@ class Camera(object):
     self._origin = origin
 
   def get_ray(self, u, v):
-    return Ray(self._origin, self._lower_left + u * self._horizontal + v * self._vertical - origin)
+    return Ray(self._origin, self._lower_left + u * self._horizontal + v * self._vertical - self._origin)
 
 
 def main():
@@ -156,7 +156,7 @@ def main():
   print(width, height)
   print(255)
 
-  camera = Camera(Vec3(-2.0, -1.0, -1.0, 4 * Vec3.right(), 2 * Vec3.up(), Vec3.zero())
+  camera = Camera(Vec3(-2.0, -1.0, -1.0), 4 * Vec3.right(), 2 * Vec3.up(), Vec3.zero())
 
   objects = HitableList([Sphere(Vec3(0,0,-1), 0.5),
                          Sphere(Vec3(0, -100.5, -1),100)])
