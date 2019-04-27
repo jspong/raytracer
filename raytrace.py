@@ -4,6 +4,7 @@ from __future__ import print_function
 import abc
 import collections
 import math
+import random
 
 class Vec3(collections.namedtuple('Vec3', 'x y z')):
 
@@ -56,6 +57,10 @@ class Vec3(collections.namedtuple('Vec3', 'x y z')):
   def ones(cls):
     return cls(1.0, 1.0, 1.0)
 
+  @classmethod
+  def rand(cls):
+    return cls(random.random(), random.random(), random.random())
+
 class Color(Vec3):
 
   @classmethod
@@ -85,12 +90,13 @@ def lerp(a, b, t):
 
 
 def color(ray, hitable):
-  record = hitable.hit(ray, 0, 100000)
+  record = hitable.hit(ray, 0.001, 100000)
   if record is None:
     t = 0.5 * (ray.direction.as_unit().y + 1.0)
     return lerp(Color.white(), Vec3(0.5, 0.7, 1.0), t)
   else:
-    return 0.5 * (record.normal + Vec3.ones())
+    target = record.pos + record.normal + random_in_unit_sphere()
+    return 0.5 * color(Ray(record.pos, target - record.pos), hitable)
 
 
 HitRecord = collections.namedtuple('HitRecord', 't pos normal')
@@ -150,8 +156,16 @@ class Camera(object):
     return Ray(self._origin, self._lower_left + u * self._horizontal + v * self._vertical - self._origin)
 
 
+def random_in_unit_sphere():
+  while True:
+    p = 2 * Vec3.rand() - Vec3.ones()
+    if p.squared_length < 1:
+      return p
+
+
 def main():
   width, height = 200, 100
+  samples = 10
   print("P3")
   print(width, height)
   print(255)
@@ -162,10 +176,15 @@ def main():
                          Sphere(Vec3(0, -100.5, -1),100)])
   for y in range(height-1, -1, -1):
     for x in range(width):
-      u = x / width
-      v = y / height
-      r = camera.get_ray(u, v)
-      print(255.9 * color(r, objects))
+      c = Vec3.zero()
+      for _ in range(samples):
+        u = (x + random.random()) / width
+        v = (y + random.random()) / height
+        r = camera.get_ray(u, v)
+        c = c + color(r, objects)
+      c = c / samples
+      c = Vec3(math.sqrt(c.x), math.sqrt(c.y), math.sqrt(c.z))
+      print(255.9 * c)
 
 
 if __name__ == '__main__':
