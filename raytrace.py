@@ -23,12 +23,6 @@ def dot(a, b):
 def cross(a, b):
   return numpy.cross(a,b)
 
-class Color(object):
-  @classmethod
-  def white(cls):
-    del cls  # unused
-    return numpy.array([1.0, 1.0, 1.0])
-
 class Ray(collections.namedtuple('Ray', 'origin direction')):
 
   def point_at(self, t):
@@ -37,7 +31,6 @@ class Ray(collections.namedtuple('Ray', 'origin direction')):
 
 def lerp(a, b, t):
   return (1 - t) * a + t * b
-
 
 def color(ray, hitable, depth=0):
   record = hitable.hit(ray, 0.001, 100000)
@@ -207,9 +200,9 @@ class Dialectric(Material):
       reflect_prob = schlick(cosine, self._refraction)
     if random.random() < reflect_prob:
       reflected = reflect(ray.direction, hit_record.normal)
-      return Ray(hit_record.pos, reflected), Color.white()
+      return Ray(hit_record.pos, reflected), numpy.ones(3)
     else:
-      return Ray(hit_record.pos, refracted), Color.white()
+      return Ray(hit_record.pos, refracted), numpy.ones(3)
     
 
 def render((y, x), width, height, camera, objects, samples):
