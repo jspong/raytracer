@@ -167,21 +167,33 @@ class HitableList(Hitable):
     return record
  
 class Camera(object):
-  def __init__(self, look_from, look_at, up, vfov, aspect):
+  def __init__(self, look_from, look_at, up, vfov, aspect, aperture, focus_dist):
     theta = vfov * math.pi / 180.
     half_height = math.tan(theta / 2)
     half_width = aspect * half_height
-    self._origin = look_from
     w = (look_from - look_at).as_unit()
-    u = cross(up, w)
+    u = cross(up, w).as_unit()
     v = cross(w, u)
-    self._lower_left = look_from - half_width * u - half_height * v - w
-    self._horizontal = 2 * half_width * u
-    self._vertical = 2 * half_height * v
+    self._origin = look_from
+    self._radius = aperture / 2
+    self._lower_left = look_from - half_width * focus_dist * u - half_height * focus_dist * v - focus_dist * w
+    self._horizontal = 2 * half_width * focus_dist * u
+    self._vertical = 2 * half_height * focus_dist * v
+    self._w = w
+    self._u = u
+    self._v = v
 
   def get_ray(self, u, v):
-    return Ray(self._origin, self._lower_left + u * self._horizontal + v * self._vertical - self._origin)
+    rd = self._radius * random_in_unit_disk()
+    offset  = self._u * rd.x + self._v * rd.y
+    return Ray(self._origin + offset, self._lower_left + u * self._horizontal + v * self._vertical - self._origin - offset)
 
+
+def random_in_unit_disk():
+  while True:
+    p = 2 * Vec3(random.random(), random.random(), 0) - Vec3(1, 1, 0)
+    if dot(p, p) < 1.0:
+      return p
 
 def random_in_unit_sphere():
   while True:
@@ -285,7 +297,9 @@ def main():
   print(width, height)
   print(255)
 
-  camera = Camera(Vec3(-2, 2, 1), Vec3(0, 0, -1), Vec3(0, 1, 0), 30, width / height)
+  look_from = Vec3(3, 3, 2)
+  look_at = Vec3(0, 0, -1)
+  camera = Camera(look_from, look_at, Vec3(0, 1.0, 0), 20, width / height, 2.0, (look_from - look_at).length)
 
   objects = HitableList([
      Sphere(Vec3(0.0, 0.0, -1.0), 0.5, Lambertian(Vec3(0.8, 0.3, 0.3))),
