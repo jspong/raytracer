@@ -42,13 +42,13 @@ def color(ray, hitable, depth=0):
   record = hitable.hit(ray, 0.001, 100000)
   if record is None:
     t = 0.5 * (unit(ray.direction)[0] + 1.0)
-    return lerp(Color.white(), numpy.array([0.5, 0.7, 1.0]), t)
+    return lerp(numpy.ones(3), numpy.array([0.5, 0.7, 1.0]), t)
   else:
     if depth > 50:
-      return numpy.array([0,0,0])
+      return numpy.zeros(3)
     scattered, attenuation = record.material.scatter(ray, record)
     if scattered is None:
-      return numpy.array([0,0,0])
+      return numpy.zeros(3)
     return attenuation * color(scattered, hitable, depth + 1)
 
 
@@ -136,7 +136,7 @@ def random_in_unit_disk():
 
 def random_in_unit_sphere():
   while True:
-    p = 2 * numpy.array([random.random(), random.random(), random.random()]) - numpy.array([1.,1.,1.])
+    p = 2 * numpy.random.random(3) - numpy.ones(3)
     if numpy.sum(p ** 2) < 1:
       return p
 
@@ -223,8 +223,8 @@ def render((y, x), width, height, camera, objects):
     u = (x + random.random()) / width
     v = (y + random.random()) / height
     r = camera.get_ray(u, v)
-    c = c + color(r, objects)
-  c = c / samples
+    c += color(r, objects)
+  c /= samples
   c = numpy.sqrt(c)
   return 255.9 * c
 
