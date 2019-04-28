@@ -3,7 +3,10 @@ from __future__ import print_function
 
 import abc
 import collections
+import functools
+import itertools
 import math
+import multiprocessing
 import random
 
 class Vec3(collections.namedtuple('Vec3', 'x y z')):
@@ -249,8 +252,21 @@ class Dialectric(Material):
       return Ray(hit_record.pos, refracted), Color.white()
     
 
+def render((y, x), width, height, camera, objects):
+  samples = 10
+  c = Vec3.zero()
+  for _ in range(samples):
+    u = (x + random.random()) / width
+    v = (y + random.random()) / height
+    r = camera.get_ray(u, v)
+    c = c + color(r, objects)
+  c = c / samples
+  c = Vec3(math.sqrt(c.x), math.sqrt(c.y), math.sqrt(c.z))
+  return 255.9 * c
+
+
 def main():
-  width, height = 400, 200
+  width, height = 200, 100
   samples = 10
   print("P3")
   print(width, height)
@@ -265,17 +281,14 @@ def main():
      Sphere(Vec3(-1, 0, -1), 0.5, Metal(Vec3(0.8, 0.8, 0.8), 1.0))
   ])
 
-  for y in range(height-1, -1, -1):
-    for x in range(width):
-      c = Vec3.zero()
-      for _ in range(samples):
-        u = (x + random.random()) / width
-        v = (y + random.random()) / height
-        r = camera.get_ray(u, v)
-        c = c + color(r, objects)
-      c = c / samples
-      c = Vec3(math.sqrt(c.x), math.sqrt(c.y), math.sqrt(c.z))
-      print(255.9 * c)
+  pool = multiprocessing.Pool(8)
+  pixels = itertools.product(range(height-1, -1, -1), range(width))
+  image = pool.map(
+      functools.partial(render, width=width, height=height,
+                                camera=camera, objects=objects),
+      pixels)
+  for pixel in image:
+    print(pixel)
 
 
 if __name__ == '__main__':
