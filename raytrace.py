@@ -167,11 +167,17 @@ class HitableList(Hitable):
     return record
  
 class Camera(object):
-  def __init__(self, lower_left, horizontal, vertical, origin):
-    self._lower_left = lower_left
-    self._horizontal = horizontal
-    self._vertical = vertical
-    self._origin = origin
+  def __init__(self, look_from, look_at, up, vfov, aspect):
+    theta = vfov * math.pi / 180.
+    half_height = math.tan(theta / 2)
+    half_width = aspect * half_height
+    self._origin = look_from
+    w = (look_from - look_at).as_unit()
+    u = cross(up, w)
+    v = cross(w, u)
+    self._lower_left = look_from - half_width * u - half_height * v - w
+    self._horizontal = 2 * half_width * u
+    self._vertical = 2 * half_height * v
 
   def get_ray(self, u, v):
     return Ray(self._origin, self._lower_left + u * self._horizontal + v * self._vertical - self._origin)
@@ -279,7 +285,7 @@ def main():
   print(width, height)
   print(255)
 
-  camera = Camera(Vec3(-2.0, -1.0, -1.0), 4 * Vec3.right(), 2 * Vec3.up(), Vec3.zero())
+  camera = Camera(Vec3(-2, 2, 1), Vec3(0, 0, -1), Vec3(0, 1, 0), 30, width / height)
 
   objects = HitableList([
      Sphere(Vec3(0.0, 0.0, -1.0), 0.5, Lambertian(Vec3(0.8, 0.3, 0.3))),
