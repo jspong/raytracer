@@ -10,84 +10,23 @@ import multiprocessing
 import random
 import sys
 
-class Vec3(collections.namedtuple('Vec3', 'x y z')):
+import numpy
+import numpy.linalg
 
-  def __add__(self, other):
-    return Vec3(self.x + other.x, self.y + other.y, self.z + other.z)
-
-  def __sub__(self, other):
-    return self + (-1 * other)
-
-  def __mul__(self, scale):
-    if isinstance(scale, Vec3):
-      return Vec3(self.x * scale.x, self.y * scale.y, self.z * scale.z)
-    else:
-      return Vec3(self.x * scale, self.y * scale, self.z * scale)
-
-  def __rmul__(self, scale):
-    return self * scale
-
-  def __neg__(self):
-    return self * -1
-
-  def __truediv__(self, scale):
-    return self * (1 / scale)
-
-  @property
-  def length(self):
-    return math.sqrt(self.squared_length)
-
-  @property
-  def squared_length(self):
-    return self.x * self.x + self.y * self.y + self.z * self.z
-
-  def as_unit(self):
-    return self / self.length
-
-  def __str__(self):
-    return '%d %d %d' % (self.x, self.y, self.z)
-
-  @classmethod
-  def right(cls):
-    return cls(1.0, 0.0, 0.0)
-
-  @classmethod
-  def up(cls):
-    return cls(0, 1.0, 0.0)
-
-  @classmethod
-  def forward(cls):
-    return cls(0, 0, -1)
-
-  @classmethod
-  def zero(cls):
-    return cls(0.0, 0.0, 0.0)
-
-  @classmethod
-  def ones(cls):
-    return cls(1.0, 1.0, 1.0)
-
-  @classmethod
-  def rand(cls):
-    return cls(random.random(), random.random(), random.random())
-
-class Color(Vec3):
-
-  @classmethod
-  def white(cls):
-    return cls.ones()
-
-  @classmethod
-  def red(cls):
-    return cls(1, 0, 0)
+def unit(v):
+  return v / numpy.sqrt(numpy.sum(v ** 2))
 
 def dot(a, b):
-  return a.x * b.x + a.y * b.y + a.z * b.z
+  return numpy.dot(a,b)
 
 def cross(a, b):
-  return Vec3(a.y * b.z - a.z * b.y,
-              a.z * b.x - a.x * b.z,
-              a.x * b.y - a.y * b.x)
+  return numpy.cross(a,b)
+
+class Color(object):
+  @classmethod
+  def white(cls):
+    del cls  # unused
+    return numpy.array([1.0, 1.0, 1.0])
 
 class Ray(collections.namedtuple('Ray', 'origin direction')):
 
@@ -102,14 +41,14 @@ def lerp(a, b, t):
 def color(ray, hitable, depth=0):
   record = hitable.hit(ray, 0.001, 100000)
   if record is None:
-    t = 0.5 * (ray.direction.as_unit().y + 1.0)
-    return lerp(Color.white(), Vec3(0.5, 0.7, 1.0), t)
+    t = 0.5 * (unit(ray.direction)[0] + 1.0)
+    return lerp(Color.white(), numpy.array([0.5, 0.7, 1.0]), t)
   else:
     if depth > 50:
-      return Vec3.zero()
+      return numpy.array([0,0,0])
     scattered, attenuation = record.material.scatter(ray, record)
     if scattered is None:
-      return Vec3.zero()
+      return numpy.array([0,0,0])
     return attenuation * color(scattered, hitable, depth + 1)
 
 
@@ -171,8 +110,8 @@ class Camera(object):
     theta = vfov * math.pi / 180.
     half_height = math.tan(theta / 2)
     half_width = aspect * half_height
-    w = (look_from - look_at).as_unit()
-    u = cross(up, w).as_unit()
+    w = unit(look_from - look_at)
+    u = unit(cross(up, w))
     v = cross(w, u)
     self._origin = look_from
     self._radius = aperture / 2
@@ -185,20 +124,20 @@ class Camera(object):
 
   def get_ray(self, u, v):
     rd = self._radius * random_in_unit_disk()
-    offset  = self._u * rd.x + self._v * rd.y
+    offset  = self._u * rd[0] + self._v * rd[1]
     return Ray(self._origin + offset, self._lower_left + u * self._horizontal + v * self._vertical - self._origin - offset)
 
 
 def random_in_unit_disk():
   while True:
-    p = 2 * Vec3(random.random(), random.random(), 0) - Vec3(1, 1, 0)
+    p = 2 * numpy.array([random.random(), random.random(), 0]) - numpy.array([1, 1, 0])
     if dot(p, p) < 1.0:
       return p
 
 def random_in_unit_sphere():
   while True:
-    p = 2 * Vec3.rand() - Vec3.ones()
-    if p.squared_length < 1:
+    p = 2 * numpy.array([random.random(), random.random(), random.random()]) - numpy.array([1.,1.,1.])
+    if numpy.sum(p ** 2) < 1:
       return p
 
 
@@ -231,7 +170,7 @@ class Metal(Material):
     self._fuzz = fuzz
 
   def scatter(self, ray, hit_record):
-    reflected = reflect(ray.direction.as_unit(), hit_record.normal)
+    reflected = reflect(unit(ray.direction), hit_record.normal)
     scattered = Ray(hit_record.pos, reflected + self._fuzz * random_in_unit_sphere())
     if dot(scattered.direction, hit_record.normal) > 0:
       return scattered, self._albedo
@@ -239,7 +178,7 @@ class Metal(Material):
 
 
 def refract(vector, normal, ni_over_nt):
-  uv = vector.as_unit()
+  uv = unit(vector)
   dt = dot(uv, normal)
   discriminant = 1.0 - ni_over_nt * ni_over_nt * (1 - dt * dt)
   if discriminant > 0:
@@ -260,16 +199,16 @@ class Dialectric(Material):
     if dot(ray.direction, hit_record.normal) > 0:
       outward_normal = -hit_record.normal
       ni_over_nt = self._refraction
-      cosine = self._refraction * dot(ray.direction, hit_record.normal) / ray.direction.length
+      cosine = self._refraction * dot(ray.direction, hit_record.normal) / length(ray.direction)
     else:
       outward_normal = hit_record.normal
       ni_over_nt = 1 / self._refraction
-      cosine = -dot(ray.direction, hit_record.normal) / ray.direction.length
+      cosine = -dot(ray.direction, hit_record.normal) / length(ray.direction)
     refracted = refract(ray.direction, outward_normal, ni_over_nt)
-    if refracted:
-      reflect_prob = schlick(cosine, self._refraction)
-    else:
+    if refracted is None:
       reflect_prob = 1.0
+    else:
+      reflect_prob = schlick(cosine, self._refraction)
     if random.random() < reflect_prob:
       reflected = reflect(ray.direction, hit_record.normal)
       return Ray(hit_record.pos, reflected), Color.white()
@@ -279,44 +218,49 @@ class Dialectric(Material):
 
 def render((y, x), width, height, camera, objects):
   samples = 10
-  c = Vec3.zero()
+  c = numpy.array([0., 0., 0.])
   for _ in range(samples):
     u = (x + random.random()) / width
     v = (y + random.random()) / height
     r = camera.get_ray(u, v)
     c = c + color(r, objects)
   c = c / samples
-  c = Vec3(math.sqrt(c.x), math.sqrt(c.y), math.sqrt(c.z))
+  c = numpy.sqrt(c)
   return 255.9 * c
 
 
+def length(v):
+  return numpy.sqrt(numpy.sum(v**2))
+
+
 def main():
-  width, height = 200, 100
-  samples = 10
+  width, height = 640, 480
+  samples = 100
   print("P3")
   print(width, height)
   print(255)
 
-  look_from = Vec3(3, 3, 2)
-  look_at = Vec3(0, 0, -1)
-  camera = Camera(look_from, look_at, Vec3(0, 1.0, 0), 20, width / height, 2.0, (look_from - look_at).length)
+  look_from = numpy.array([-3., 3., 2.])
+  look_at = numpy.array([0., 0., -1.])
+  camera = Camera(look_from, look_at, numpy.array([0., 1.0, 0.]), 30, width / height, 2.0, length(look_from - look_at))
 
   objects = HitableList([
-     Sphere(Vec3(0.0, 0.0, -1.0), 0.5, Lambertian(Vec3(0.8, 0.3, 0.3))),
-     Sphere(Vec3(0.0, -100.5, -1.0), 100.0, Lambertian(Vec3(0.8, 0.8, 0.0))),
-     Sphere(Vec3(1.0, 0.0, -1.0), 0.5, Metal(Vec3(0.8, 0.6, 0.2), 0.3)),
-     Sphere(Vec3(-1.0, 0.0, -1.0), 0.5, Dialectric(1.5)),
-     Sphere(Vec3(-1.0, 0.0, -1.0), -0.45, Dialectric(1.5)),
+     Sphere(numpy.array([0.0, 0.0, -1.0]), 0.5, Lambertian(numpy.array([0.3, 0.6, 0.3]))),
+     Sphere(numpy.array([0.0, -100.5, -1.0]), 100.0, Lambertian(numpy.array([0.8, 0.8, 0.0]))),
+     Sphere(numpy.array([1.0, 0.0, -1.0]), 0.5, Metal(numpy.array([0.8, 0.6, 0.2]), 0.3)),
+     Sphere(numpy.array([-1.0, 0.0, -1.0]), 0.5, Dialectric(1.5)),
+     Sphere(numpy.array([-1.0, 0.0, -1.0]), -0.45, Dialectric(1.5)),
   ])
 
   pool = multiprocessing.Pool(8)
   pixels = itertools.product(range(height-1, -1, -1), range(width))
+
   image = pool.map(
       functools.partial(render, width=width, height=height,
                                 camera=camera, objects=objects),
       pixels)
   for pixel in image:
-    print(pixel)
+    print(int(pixel[0]), int(pixel[1]), int(pixel[2]))
 
 
 if __name__ == '__main__':
