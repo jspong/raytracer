@@ -8,6 +8,7 @@ import itertools
 import math
 import multiprocessing
 import random
+import sys
 
 class Vec3(collections.namedtuple('Vec3', 'x y z')):
 
@@ -140,7 +141,13 @@ class Sphere(Hitable):
       t = (-b - math.sqrt(discriminant)) / a
       if t < t_max and t > t_min:
         point = ray.point_at(t)
-        return HitRecord(t, point, (point - self._center) / self._radius, self._material)
+        normal = (point - self._center) / self._radius
+        return HitRecord(t, point, normal, self._material)
+      t = (-b + math.sqrt(discriminant)) / a
+      if t < t_max and t > t_min:
+        point = ray.point_at(t)
+        normal = (point - self._center) / self._radius
+        return HitRecord(t, point, normal, self._material)
     return None
 
 class HitableList(Hitable):
@@ -275,10 +282,10 @@ def main():
   camera = Camera(Vec3(-2.0, -1.0, -1.0), 4 * Vec3.right(), 2 * Vec3.up(), Vec3.zero())
 
   objects = HitableList([
-     Sphere(Vec3(0,0,-1), 0.5, Lambertian(Vec3(0.8, 0.3, 0.3))),
-     Sphere(Vec3(0, -100.5, -1), 100, Lambertian(Vec3(0.8, 0.8, 0.0))),
-     Sphere(Vec3(1, 0, -1), 0.5, Metal(Vec3(0.8, 0.6, 0.2), 0.3)),
-     Sphere(Vec3(-1, 0, -1), 0.5, Metal(Vec3(0.8, 0.8, 0.8), 1.0))
+     Sphere(Vec3(0.0, 0.0, -1.0), 0.5, Lambertian(Vec3(0.8, 0.3, 0.3))),
+     Sphere(Vec3(0.0, -100.5, -1.0), 100.0, Lambertian(Vec3(0.8, 0.8, 0.0))),
+     Sphere(Vec3(1.0, 0.0, -1.0), 0.5, Metal(Vec3(0.8, 0.6, 0.2), 0.3)),
+     Sphere(Vec3(-1.0, 0.0, -1.0), 0.5, Dialectric(1.5))
   ])
 
   pool = multiprocessing.Pool(8)
