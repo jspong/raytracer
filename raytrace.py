@@ -74,16 +74,11 @@ class Sphere(Hitable):
   def hit(self, ray, t_min, t_max):
     oc = ray.origin - self._center
     a = dot(ray.direction, ray.direction)
-    b = dot(oc, ray.direction)
+    b = 2 * dot(oc, ray.direction)
     c = dot(oc, oc) - self._radius * self._radius
-    discriminant = b * b - a * c
-    if discriminant > 0:
-      t = (-b - math.sqrt(discriminant)) / a
-      if t < t_max and t > t_min:
-        point = ray.point_at(t)
-        normal = (point - self._center) / self._radius
-        return HitRecord(t, point, normal, self._material)
-      t = (-b + math.sqrt(discriminant)) / a
+    roots = numpy.roots([a, b, c])
+    real = roots.real[abs(roots.imag)<1e-5]
+    for t in numpy.flip(real):
       if t < t_max and t > t_min:
         point = ray.point_at(t)
         normal = (point - self._center) / self._radius
