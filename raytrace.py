@@ -2,6 +2,7 @@ from __future__ import division
 from __future__ import print_function
 
 import abc
+import argparse
 import collections
 import functools
 import itertools
@@ -216,8 +217,7 @@ class Dialectric(Material):
       return Ray(hit_record.pos, refracted), Color.white()
     
 
-def render((y, x), width, height, camera, objects):
-  samples = 10
+def render((y, x), width, height, camera, objects, samples):
   c = numpy.array([0., 0., 0.])
   for _ in range(samples):
     u = (x + random.random()) / width
@@ -233,9 +233,18 @@ def length(v):
   return numpy.sqrt(numpy.sum(v**2))
 
 
+def parse_args():
+  parser = argparse.ArgumentParser()
+  parser.add_argument('--width', type=int, default=640)
+  parser.add_argument('--height', type=int, default=480)
+  parser.add_argument('--samples', type=int, default=10)
+  parser.add_argument('--workers', type=int, default=8)
+  return parser.parse_args()
+
+
 def main():
-  width, height = 640, 480
-  samples = 100
+  args = parse_args()
+  width, height = args.width, args.height
   print("P3")
   print(width, height)
   print(255)
@@ -252,12 +261,13 @@ def main():
      Sphere(numpy.array([-1.0, 0.0, -1.0]), -0.45, Dialectric(1.5)),
   ])
 
-  pool = multiprocessing.Pool(8)
+  pool = multiprocessing.Pool(args.workers)
   pixels = itertools.product(range(height-1, -1, -1), range(width))
 
   image = pool.map(
       functools.partial(render, width=width, height=height,
-                                camera=camera, objects=objects),
+                                camera=camera, objects=objects,
+                                samples=args.samples),
       pixels)
   for pixel in image:
     print(int(pixel[0]), int(pixel[1]), int(pixel[2]))
