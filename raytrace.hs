@@ -5,8 +5,8 @@ type Image = [Row]
 add :: Vec3 -> Vec3 -> Vec3
 add v1 v2 = Vec3 (x v1 + x v2) (y v1 + y v2) (z v1 + z v2)
 
-negate :: Vec3 -> Vec3
-negate v = Vec3 (-x v) (-y v) (-z v)
+negate3 :: Vec3 -> Vec3
+negate3 v = Vec3 (-x v) (-y v) (-z v)
 
 multiply :: Vec3 -> Vec3 -> Vec3
 multiply v1 v2 = Vec3 (x v1 * x v2) (y v1 * y v2) (z v1 * z v2)
@@ -44,8 +44,20 @@ pointAt :: Ray -> Float -> Vec3
 pointAt r t = add (origin r) (scale (direction r) t)
 
 color :: Ray -> Vec3
-color r = let t = 0.5 * (y (normalize (direction r)) + 1.0)
-          in scale (add (scale (Vec3 1.0 1.0 1.0) (1.0-t)) (scale (Vec3 0.5 0.7 1.0) t)) 255.99
+color r = if hit (Sphere (Vec3 0.0 0.0 (-1.0)) 0.5) r
+          then (Vec3 255.0 0.0 0.0)
+          else let t = 0.5 * (y (normalize (direction r)) + 1.0)
+               in scale (add (scale (Vec3 1.0 1.0 1.0) (1.0-t)) (scale (Vec3 0.5 0.7 1.0) t)) 255.99
+
+data Sphere = Sphere { center :: Vec3 , radius :: Float }
+
+hit :: Sphere -> Ray -> Bool
+hit s r = let oc = add (origin r) (negate3 (center s))
+              a = dot (direction r) (direction r) 
+              b = 2.0 * (dot oc (direction r))
+              c = (dot oc oc) - (radius s) * (radius s)
+              discriminant = b * b - 4 * a *c
+          in discriminant > 0
 
 lower_left = Vec3 (-2.0) (-1.0) (-1.0)
 horizontal = Vec3  4.0  0.0  0.0
