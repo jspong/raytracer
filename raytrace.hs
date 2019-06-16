@@ -44,20 +44,23 @@ pointAt :: Ray -> Float -> Vec3
 pointAt r t = add (origin r) (scale (direction r) t)
 
 color :: Ray -> Vec3
-color r = if hit (Sphere (Vec3 0.0 0.0 (-1.0)) 0.5) r
-          then (Vec3 255.0 0.0 0.0)
-          else let t = 0.5 * (y (normalize (direction r)) + 1.0)
-               in scale (add (scale (Vec3 1.0 1.0 1.0) (1.0-t)) (scale (Vec3 0.5 0.7 1.0) t)) 255.99
+color r = let t = hit (Sphere (Vec3 0.0 0.0 (-1.0)) 0.5) r
+          in if t > 0
+             then scale (add (normalize (add (pointAt r t) (Vec3 0.0 0.0 1.0))) (Vec3 1.0 1.0 1.0)) (0.5 * 255.99)
+             else let t = 0.5 * (y (normalize (direction r)) + 1.0)
+                  in scale (add (scale (Vec3 1.0 1.0 1.0) (1.0-t)) (scale (Vec3 0.5 0.7 1.0) t)) 255.99
 
 data Sphere = Sphere { center :: Vec3 , radius :: Float }
 
-hit :: Sphere -> Ray -> Bool
+hit :: Sphere -> Ray -> Float
 hit s r = let oc = add (origin r) (negate3 (center s))
               a = dot (direction r) (direction r) 
               b = 2.0 * (dot oc (direction r))
               c = (dot oc oc) - (radius s) * (radius s)
               discriminant = b * b - 4 * a *c
-          in discriminant > 0
+          in if discriminant < 0
+             then (-1.0)
+             else (-b - (sqrt discriminant)) / (2.0 * a)
 
 lower_left = Vec3 (-2.0) (-1.0) (-1.0)
 horizontal = Vec3  4.0  0.0  0.0
