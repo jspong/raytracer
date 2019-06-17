@@ -1,3 +1,5 @@
+import Data.Maybe
+
 data Vec3 = Vec3 { x :: Float, y :: Float, z :: Float } deriving (Show)
 type Row = [Vec3]
 type Image = [Row]
@@ -44,23 +46,33 @@ pointAt :: Ray -> Float -> Vec3
 pointAt r t = add (origin r) (scale (direction r) t)
 
 color :: Ray -> Vec3
-color r = let t = hit (Sphere (Vec3 0.0 0.0 (-1.0)) 0.5) r
-          in if t > 0
-             then scale (add (normalize (add (pointAt r t) (Vec3 0.0 0.0 1.0))) (Vec3 1.0 1.0 1.0)) (0.5 * 255.99)
+color r = let t = hit (Sphere (Vec3 0.0 0.0 (-1.0)) 0.5) r 0.0 10000.0
+          in if (isJust t)
+             then scale (add (normalize (add (pointAt r (time (fromJust t))) (Vec3 0.0 0.0 1.0))) (Vec3 1.0 1.0 1.0)) (0.5 * 255.99)
              else let t = 0.5 * (y (normalize (direction r)) + 1.0)
                   in scale (add (scale (Vec3 1.0 1.0 1.0) (1.0-t)) (scale (Vec3 0.5 0.7 1.0) t)) 255.99
 
-data Sphere = Sphere { center :: Vec3 , radius :: Float }
+data Hitable = Sphere { center :: Vec3 , radius :: Float }
 
-hit :: Sphere -> Ray -> Float
-hit s r = let oc = add (origin r) (negate3 (center s))
-              a = dot (direction r) (direction r) 
-              b = 2.0 * (dot oc (direction r))
-              c = (dot oc oc) - (radius s) * (radius s)
-              discriminant = b * b - 4 * a *c
-          in if discriminant < 0
-             then (-1.0)
-             else (-b - (sqrt discriminant)) / (2.0 * a)
+data HitRecord = HitRecord { time :: Float, position :: Vec3, normal :: Vec3 }
+
+hit :: Hitable -> Ray -> Float -> Float -> Maybe HitRecord
+hit s r tMin tMax = let oc = add (origin r) (negate3 (center s))
+                        a = dot (direction r) (direction r) 
+                        b = dot oc (direction r)
+                        c = (dot oc oc) - (radius s) * (radius s)
+                        discriminant = b * b - a * c 
+                    in if discriminant > 0
+                       then let tmp = sqrt(b * b - a * c)
+                                sol1 = (-b - tmp) / a
+                                sol2 = (-b + tmp) / a
+                            in if sol1 < tMax && sol1 > tMin
+                               then Just (HitRecord sol1 (pointAt r sol1) (scale (add (pointAt r sol1) (center s)) (1 / radius s)))
+                               else if sol2 < tMax && sol2 > tMin
+                                    then Just (HitRecord sol2 (pointAt r sol2) (scale (add (pointAt r sol2) (center s)) (1 / radius s)))
+                                    else Nothing
+                       else Nothing
+
 
 lower_left = Vec3 (-2.0) (-1.0) (-1.0)
 horizontal = Vec3  4.0  0.0  0.0
