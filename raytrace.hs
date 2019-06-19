@@ -48,7 +48,7 @@ pointAt r t = add (origin r) (scale (direction r) t)
 color :: Ray -> Vec3
 color r = let t = getClosestHit [(Sphere (Vec3 0.0 0.0 (-1.0)) 0.5), (Sphere (Vec3 0.0 (-100.5) (-1.0)) 100.0)] r 0.0 10000.0
           in if (isJust t)
-             then scale (add (normalize (add (pointAt r (time (fromJust t))) (Vec3 0.0 0.0 1.0))) (Vec3 1.0 1.0 1.0)) (0.5 * 255.99)
+             then scale (add (normal (fromJust t)) (Vec3 1.0 1.0 1.0)) (0.5 * 255.99)
              else let t = 0.5 * (y (normalize (direction r)) + 1.0)
                   in scale (add (scale (Vec3 1.0 1.0 1.0) (1.0-t)) (scale (Vec3 0.5 0.7 1.0) t)) 255.99
 
