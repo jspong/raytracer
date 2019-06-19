@@ -94,20 +94,17 @@ getClosestHit (x:xs) r tMin tMax = let this = (hit x r tMin tMax)
                                    else let other = getClosestHit xs r tMin (closestTime tMax this)
                                         in closestHit this other
 
+data Camera = Camera { lower_left :: Vec3, horizontal :: Vec3, vertical :: Vec3, imgOrigin :: Vec3 }
+camera = Camera (Vec3 (-2.0) (-1.0) (-1.0)) (Vec3 4.0 0.0 0.0) (Vec3 0.0 2.0 0.0) (Vec3 0.0 0.0 0.0)
 
-lower_left = Vec3 (-2.0) (-1.0) (-1.0)
-horizontal = Vec3  4.0  0.0  0.0
-vertical   = Vec3  0.0  2.0  0.0
-imgOrigin = Vec3  0.0  0.0  0.0
+getRay :: Camera -> Float -> Float -> Ray
+getRay c u v = Ray (imgOrigin c) (add (lower_left c) (add (scale (horizontal c) u) (add (scale (vertical c) v) (negate3 (imgOrigin c)))))
 
 genImage :: Integer -> Integer -> Image
 genImage nx ny = [
-                  [ color (Ray imgOrigin (add (add lower_left 
-                                                   (scale horizontal (fromIntegral x / fromIntegral nx)))
-                                              (scale vertical (fromIntegral y / fromIntegral ny)))) 
-                          | x <- [0 .. nx-1]]
-                        | y <- [ny - yi + 1 | yi <- [1 .. ny]]
-                      ];
+                  [ color (getRay camera (fromIntegral x / fromIntegral nx) (fromIntegral y / fromIntegral ny))
+                    | x <- [0 .. nx-1]] | y <- [ny - yi + 1 | yi <- [1 .. ny]]
+                 ];
 
 strVec3 :: Vec3 -> String
 strVec3 v = show (floor (x v)) ++ " " ++ show (floor (y v)) ++ " " ++ show (floor (z v))
