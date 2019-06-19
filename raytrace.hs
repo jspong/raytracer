@@ -45,12 +45,15 @@ data Ray = Ray { origin :: Vec3
 pointAt :: Ray -> Float -> Vec3
 pointAt r t = add (origin r) (scale (direction r) t)
 
+lerp :: Vec3 -> Vec3 -> Float -> Vec3
+lerp x y t = add (scale x t) (scale y (1-t))
+
+hitColor :: (Maybe HitRecord) -> Ray -> Vec3
+hitColor Nothing r = scale (lerp (Vec3 1.0 1.0 1.0) (Vec3 0.5 0.7 1.0) (0.5 * (y (normalize (direction r))))) 255.99
+hitColor (Just x) _ = scale (add (normal x) (Vec3 1.0 1.0 1.0)) (0.5 * 255.99)
+
 color :: Ray -> Vec3
-color r = let t = getClosestHit [(Sphere (Vec3 0.0 0.0 (-1.0)) 0.5), (Sphere (Vec3 0.0 (-100.5) (-1.0)) 100.0)] r 0.0 10000.0
-          in if (isJust t)
-             then scale (add (normal (fromJust t)) (Vec3 1.0 1.0 1.0)) (0.5 * 255.99)
-             else let t = 0.5 * (y (normalize (direction r)) + 1.0)
-                  in scale (add (scale (Vec3 1.0 1.0 1.0) (1.0-t)) (scale (Vec3 0.5 0.7 1.0) t)) 255.99
+color r = hitColor (getClosestHit [(Sphere (Vec3 0.0 0.0 (-1.0)) 0.5), (Sphere (Vec3 0.0 (-100.5) (-1.0)) 100.0)] r 0.0 10000.0) r
 
 data Hitable = Sphere { center :: Vec3 , radius :: Float }
 
@@ -73,15 +76,23 @@ hit s r tMin tMax = let oc = add (origin r) (negate3 (center s))
                                     else Nothing
                        else Nothing
 
+closestTime :: Float -> Maybe HitRecord -> Float
+closestTime t Nothing = t
+closestTime t (Just x) = min t (time x)
+
+closestHit :: Maybe HitRecord -> Maybe HitRecord -> Maybe HitRecord
+closestHit Nothing Nothing = Nothing
+closestHit (Just x) Nothing = (Just x)
+closestHit Nothing (Just x) = (Just x)
+closestHit (Just x) (Just y) = if (time x) < (time y) then (Just x) else (Just y)
+
 getClosestHit :: [Hitable] -> Ray -> Float -> Float -> Maybe HitRecord
 getClosestHit [] _ _ _ = Nothing
 getClosestHit (x:xs) r tMin tMax = let this = (hit x r tMin tMax)
                                    in if isNothing this
                                       then getClosestHit xs r tMin tMax
-                                   else let other = getClosestHit xs r tMin (min (time (fromJust this)) tMax)
-                                        in if isNothing other
-                                           then this
-                                           else if (time (fromJust this)) < (time (fromJust other)) then this else other 
+                                   else let other = getClosestHit xs r tMin (closestTime tMax this)
+                                        in closestHit this other
 
 
 lower_left = Vec3 (-2.0) (-1.0) (-1.0)
