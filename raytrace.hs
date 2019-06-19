@@ -46,7 +46,7 @@ pointAt :: Ray -> Float -> Vec3
 pointAt r t = add (origin r) (scale (direction r) t)
 
 color :: Ray -> Vec3
-color r = let t = hit (Sphere (Vec3 0.0 0.0 (-1.0)) 0.5) r 0.0 10000.0
+color r = let t = getClosestHit [(Sphere (Vec3 0.0 0.0 (-1.0)) 0.5), (Sphere (Vec3 0.0 (-100.5) (-1.0)) 100.0)] r 0.0 10000.0
           in if (isJust t)
              then scale (add (normalize (add (pointAt r (time (fromJust t))) (Vec3 0.0 0.0 1.0))) (Vec3 1.0 1.0 1.0)) (0.5 * 255.99)
              else let t = 0.5 * (y (normalize (direction r)) + 1.0)
@@ -72,6 +72,16 @@ hit s r tMin tMax = let oc = add (origin r) (negate3 (center s))
                                     then Just (HitRecord sol2 (pointAt r sol2) (scale (add (pointAt r sol2) (center s)) (1 / radius s)))
                                     else Nothing
                        else Nothing
+
+getClosestHit :: [Hitable] -> Ray -> Float -> Float -> Maybe HitRecord
+getClosestHit [] _ _ _ = Nothing
+getClosestHit (x:xs) r tMin tMax = let this = (hit x r tMin tMax)
+                                   in if isNothing this
+                                      then getClosestHit xs r tMin tMax
+                                   else let other = getClosestHit xs r tMin (min (time (fromJust this)) tMax)
+                                        in if isNothing other
+                                           then this
+                                           else if (time (fromJust this)) < (time (fromJust other)) then this else other 
 
 
 lower_left = Vec3 (-2.0) (-1.0) (-1.0)
