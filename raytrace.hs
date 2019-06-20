@@ -109,12 +109,12 @@ camera = Camera (Vec3 (-2.0) (-1.0) (-1.0)) (Vec3 4.0 0.0 0.0) (Vec3 0.0 2.0 0.0
 getRay :: Camera -> Float -> Float -> Ray
 getRay c u v = Ray (imgOrigin c) (add (lower_left c) (add (scale (horizontal c) u) (add (scale (vertical c) v) (negate3 (imgOrigin c)))))
 
-g = mkStdGen 1000
+randomGen = mkStdGen 1000
 
 genImage :: Integer -> Integer -> Image
 genImage nx ny = [
                   [ average3 [color (getRay camera (((fromIntegral x) + u) / fromIntegral nx) (((fromIntegral y) + v) / fromIntegral ny))
-                             | (u, v) <- (zip (take 10 (randoms g :: [Float])) (randoms g :: [Float]))]
+                             | (u, v) <- (zip (take 10 (randoms randomGen :: [Float])) (randoms randomGen :: [Float]))]
                   | x <- [0 .. nx-1]] | y <- [ny - yi + 1 | yi <- [1 .. ny]]
                  ];
 
