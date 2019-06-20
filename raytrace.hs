@@ -1,4 +1,5 @@
 import Data.Maybe
+import System.Random
 
 data Vec3 = Vec3 { x :: Float, y :: Float, z :: Float } deriving (Show)
 type Row = [Vec3]
@@ -55,6 +56,14 @@ hitColor (Just x) _ = scale (add (normal x) (Vec3 1.0 1.0 1.0)) (0.5 * 255.99)
 color :: Ray -> Vec3
 color r = hitColor (getClosestHit [(Sphere (Vec3 0.0 0.0 (-1.0)) 0.5), (Sphere (Vec3 0.0 (-100.5) (-1.0)) 100.0)] r 0.0 10000.0) r
 
+average3_ :: [Vec3] -> Vec3 -> Int -> Vec3
+average3_ [] a n = scale a (1.0 / fromIntegral n)
+average3_ (x:xs) a n = average3_ xs (add a x) (n+1)
+
+average3 :: [Vec3] -> Vec3
+average3 [] = Vec3 0.0 0.0 0.0
+average3 xs = average3_ xs (Vec3 0.0 0.0 0.0) 0
+
 data Hitable = Sphere { center :: Vec3 , radius :: Float }
 
 data HitRecord = HitRecord { time :: Float, position :: Vec3, normal :: Vec3 }
@@ -101,10 +110,13 @@ getRay :: Camera -> Float -> Float -> Ray
 getRay c u v = Ray (imgOrigin c) (add (lower_left c) (add (scale (horizontal c) u) (add (scale (vertical c) v) (negate3 (imgOrigin c)))))
 
 genImage :: Integer -> Integer -> Image
-genImage nx ny = [
-                  [ color (getRay camera (fromIntegral x / fromIntegral nx) (fromIntegral y / fromIntegral ny))
-                    | x <- [0 .. nx-1]] | y <- [ny - yi + 1 | yi <- [1 .. ny]]
-                 ];
+genImage nx ny = let g = mkStdGen 1000
+                     us = take 10 (randoms g :: [Float])
+                     vs = take 10 (randoms g :: [Float])
+                 in [
+                      [ average3 [color (getRay camera (((fromIntegral x) + u) / fromIntegral nx) (((fromIntegral y) + v) / fromIntegral ny)) | (u, v) <- (zip us vs)]
+                      | x <- [0 .. nx-1]] | y <- [ny - yi + 1 | yi <- [1 .. ny]]
+                    ];
 
 strVec3 :: Vec3 -> String
 strVec3 v = show (floor (x v)) ++ " " ++ show (floor (y v)) ++ " " ++ show (floor (z v))
