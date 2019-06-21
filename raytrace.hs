@@ -63,14 +63,6 @@ data Hitable = Sphere { center :: Vec3 , radius :: Float , material :: Material}
 
 data HitRecord = HitRecord { time :: Float, position :: Vec3, normal :: Vec3 , material_ :: Material }
 
-randomInUnitSphere :: StdGen -> (Vec3, StdGen)
-randomInUnitSphere g = let range = (-1.0, 1.0)
-                           (x, g') = randomR range g
-                           (y, g'') = randomR range g'
-                           (z, g''') = randomR range g''
-                           v = Vec3 x y z
-                       in if squared_length v < 1.0 then (v, g''') else randomInUnitSphere g'''
-
 hit :: Hitable -> Ray -> Float -> Float -> Maybe HitRecord
 hit s r tMin tMax = let oc = add (origin r) (negate3 (center s))
                         a = dot (direction r) (direction r) 
@@ -82,9 +74,13 @@ hit s r tMin tMax = let oc = add (origin r) (negate3 (center s))
                                 sol1 = (-b - tmp) / a
                                 sol2 = (-b + tmp) / a
                             in if sol1 < tMax && sol1 > tMin
-                               then Just (HitRecord sol1 (pointAt r sol1) (scale (add (pointAt r sol1) (negate3 (center s))) (1 / radius s)) (material s))
+                               then let p = pointAt r sol1
+                                        normal = scale (add p (negate3 (center s))) (1.0 / (radius s))
+                                    in Just (HitRecord sol1 p normal (material s))
                                else if sol2 < tMax && sol2 > tMin
-                                    then Just (HitRecord sol2 (pointAt r sol2) (scale (add (pointAt r sol2) (negate3 (center s))) (1 / radius s)) (material s))
+                                    then let p = pointAt r sol2
+                                             normal = scale (add p (negate3 (center s))) (1.0 / (radius s))
+                                         in Just (HitRecord sol2 p normal (material s))
                                     else Nothing
                        else Nothing
 
@@ -136,13 +132,22 @@ strImage (x:xs) = strVec3 x ++ "\n" ++ strImage xs
 data Material = Lambertian { albedo :: Vec3 }
               | Metal { albedo :: Vec3 }
 
+randomInUnitSphere :: StdGen -> (Vec3, StdGen)
+randomInUnitSphere g = let range = (-1.0, 1.0)
+                           (x, g') = randomR range g
+                           (y, g'') = randomR range g'
+                           (z, g''') = randomR range g''
+                           v = Vec3 x y z
+                       in if squared_length v < 1.0 then (v, g''') else randomInUnitSphere g'''
+
 reflect :: Vec3 -> Vec3 -> Vec3
 reflect v n = add v (scale n (-2 * dot v n))
 
 scatter :: StdGen -> Material -> Ray -> HitRecord -> (Maybe (Vec3, Ray), StdGen)
 scatter g (Lambertian a) r hr = let (u, g') = randomInUnitSphere g
                                     target = add (add (position hr) (normal hr)) u
-                                in (Just (a, (Ray (position hr) (add target (negate3 (position hr))))), g')
+                                    scattered = Ray (position hr) (add target (negate3 (position hr)))
+                                in (Just (a, scattered), g')
 scatter g (Metal a) r hr = let reflected = reflect (normalize $ direction r) (normal hr)
                                scattered = Ray (position hr) reflected
                                d = dot reflected (normal hr)
@@ -158,13 +163,11 @@ render g (Just (v, r)) world d = let (c, g') = color_ r g world (d-1)
 hitColor :: StdGen -> (Maybe HitRecord) -> Ray -> [Hitable] -> Integer -> (Vec3, StdGen)
 hitColor g _ _ _ 0 = (Vec3 0.0 0.0 0.0, g)
 hitColor g Nothing r _ _ = (lerp (Vec3 1.0 1.0 1.0) (Vec3 0.5 0.7 1.0) (0.5 * ((y (normalize (direction r))) + 1)), g)
-hitColor g (Just rec) r w d = let (u, g') = randomInUnitSphere g
-                                  target = add (add (position rec) (normal rec)) u
-                                  (scattered, g'') = scatter g' (material_ rec) r rec
-                              in render g'' scattered w d
+hitColor g (Just rec) r w d = let (scattered, g') = scatter g (material_ rec) r rec
+                              in render g' scattered w d
 
 color_ :: Ray -> StdGen -> [Hitable] -> Integer -> (Vec3, StdGen)
-color_ r g world d = hitColor g (getClosestHit world r 0.000001 1000000) r world d
+color_ r g world d = hitColor g (getClosestHit world r 0.00001 1000000) r world d
 
 color :: Ray -> StdGen -> [Hitable] -> Vec3
 color r g world = let (v, _) = color_ r g world 50
