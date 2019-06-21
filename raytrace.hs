@@ -108,16 +108,16 @@ getClosestHit (x:xs) r tMin tMax = let this = (hit x r tMin tMax)
 
 -- Image Generation
 
-data Config = Config { w :: Integer, h :: Integer, samples :: Int }
+data Config = Config { w :: Int, h :: Int, samples :: Int }
 
-coords :: StdGen -> Integer -> Integer -> Integer -> [(StdGen, Integer, Integer)]
+coords :: StdGen -> Int -> Int -> Int -> [(StdGen, Int, Int)]
 coords g x nx ny = if x == nx
                    then if ny == 0
                         then []
                         else coords (fst $ split g) 0 nx (ny-1)
                    else ((g, x, ny):coords (fst $ split g) (x+1) nx ny)
 
-toCoord :: Integer -> Integer -> Float -> Float
+toCoord :: Int -> Int -> Float -> Float
 toCoord x nx u = ((fromIntegral x) + u) / (fromIntegral nx)
 
 genImage :: StdGen -> Config -> [Hitable] -> Image
@@ -203,18 +203,18 @@ getRay c u v = Ray (imgOrigin c) (add (lower_left c) (add (scale (horizontal c) 
 
 -- Rendering Colors
 
-render :: StdGen -> Maybe (Vec3, Ray) -> [Hitable] -> Integer -> (Vec3, StdGen)
+render :: StdGen -> Maybe (Vec3, Ray) -> [Hitable] -> Int -> (Vec3, StdGen)
 render g Nothing _ _ = (Vec3 0.0 0.0 0.0, g)
 render g (Just (v, r)) world d = let (c, g') = color_ r g world (d-1)
                                  in (multiply v c, g')
 
-hitColor :: StdGen -> (Maybe HitRecord) -> Ray -> [Hitable] -> Integer -> (Vec3, StdGen)
+hitColor :: StdGen -> (Maybe HitRecord) -> Ray -> [Hitable] -> Int -> (Vec3, StdGen)
 hitColor g _ _ _ 0 = (Vec3 0.0 0.0 0.0, g)
 hitColor g Nothing r _ _ = (lerp (Vec3 1.0 1.0 1.0) (Vec3 0.5 0.7 1.0) (0.5 * ((y (normalize (direction r))) + 1)), g)
 hitColor g (Just rec) r w d = let (scattered, g') = scatter g (material_ rec) r rec
                               in render g' scattered w d
 
-color_ :: Ray -> StdGen -> [Hitable] -> Integer -> (Vec3, StdGen)
+color_ :: Ray -> StdGen -> [Hitable] -> Int -> (Vec3, StdGen)
 color_ r g world d = hitColor g (getClosestHit world r 0.00001 1000000) r world d
 
 color :: Ray -> StdGen -> [Hitable] -> Vec3
