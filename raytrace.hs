@@ -1,6 +1,11 @@
 import Data.Maybe
 import System.Random
 
+-- Utility functions
+
+rands :: StdGen -> [StdGen]
+rands g = let (g', g'') = split g in (g':rands g'')
+
 -- Vec3 operations
 
 data Vec3 = Vec3 { x :: Float, y :: Float, z :: Float } deriving (Show)
@@ -103,6 +108,8 @@ getClosestHit (x:xs) r tMin tMax = let this = (hit x r tMin tMax)
 
 -- Image Generation
 
+data Config = Config { w :: Integer, h :: Integer, samples :: Int }
+
 coords :: StdGen -> Integer -> Integer -> Integer -> [(StdGen, Integer, Integer)]
 coords g x nx ny = if x == nx
                    then if ny == 0
@@ -113,11 +120,11 @@ coords g x nx ny = if x == nx
 toCoord :: Integer -> Integer -> Float -> Float
 toCoord x nx u = ((fromIntegral x) + u) / (fromIntegral nx)
 
-genImage :: StdGen -> Integer -> Integer -> [Hitable] -> Image
-genImage g nx ny world = [ let us = randoms (snd $ split g') :: [Float]
-                               vs = randoms (snd $ split (snd $ split g')) :: [Float]
-                     in average3 [ color (getRay camera (toCoord x nx u) (toCoord y ny v)) g' world | (u, v) <- take 10 (zip us vs) ]
-                   | (g', x, y) <- coords g 0 nx ny ];
+genImage :: StdGen -> Config -> [Hitable] -> Image
+genImage g c world = [ let us = randoms (snd $ split g') :: [Float]
+                           vs = randoms (snd $ split (snd $ split g')) :: [Float]
+                       in average3 [ color (getRay camera (toCoord x (w c) u) (toCoord y (h c) v)) g' world | (u, v) <- take (samples c) (zip us vs) ]
+                     | (g', x, y) <- coords g 0 (w c) (h c)]
 
 strVec3 :: Vec3 -> String
 strVec3 v = show (floor (x v)) ++ " " ++ show (floor (y v)) ++ " " ++ show (floor (z v))
@@ -186,6 +193,14 @@ scatter g (Dialectric i) r hr = let reflected = reflect (direction r) (normal hr
                                     refracted = refract (direction r) outward_normal ni_over_nt
                                 in glass g hr refracted reflected cosine i
 
+-- Camera
+
+data Camera = Camera { lower_left :: Vec3, horizontal :: Vec3, vertical :: Vec3, imgOrigin :: Vec3 }
+camera = Camera (Vec3 (-2.0) (-1.0) (-1.0)) (Vec3 4.0 0.0 0.0) (Vec3 0.0 2.0 0.0) (Vec3 0.0 0.0 0.0)
+
+getRay :: Camera -> Float -> Float -> Ray
+getRay c u v = Ray (imgOrigin c) (add (lower_left c) (add (scale (horizontal c) u) (add (scale (vertical c) v) (negate3 (imgOrigin c)))))
+
 -- Rendering Colors
 
 render :: StdGen -> Maybe (Vec3, Ray) -> [Hitable] -> Integer -> (Vec3, StdGen)
@@ -206,18 +221,10 @@ color :: Ray -> StdGen -> [Hitable] -> Vec3
 color r g world = let (v, _) = color_ r g world 50
                     in scale (Vec3 (sqrt $ x v) (sqrt $ y v) (sqrt $ z v)) 255.99
 
-data Camera = Camera { lower_left :: Vec3, horizontal :: Vec3, vertical :: Vec3, imgOrigin :: Vec3 }
-camera = Camera (Vec3 (-2.0) (-1.0) (-1.0)) (Vec3 4.0 0.0 0.0) (Vec3 0.0 2.0 0.0) (Vec3 0.0 0.0 0.0)
-
-getRay :: Camera -> Float -> Float -> Ray
-getRay c u v = Ray (imgOrigin c) (add (lower_left c) (add (scale (horizontal c) u) (add (scale (vertical c) v) (negate3 (imgOrigin c)))))
-
-rands :: StdGen -> [StdGen]
-rands g = let (g', g'') = split g in (g':rands g'')
-
 main = do {
+   config <- return $ Config 100 50 3;
    putStrLn "P3";
-   putStrLn "400 200";
+   putStrLn ((show $ w config) ++ " " ++ (show $ h config));
    putStrLn "255";
    stdGen <- getStdGen;
    world <- return [(Sphere (Vec3 0.0 0.0 (-1.0)) 0.5 (Lambertian $ Vec3 0.8 0.3 0.3)),
@@ -225,5 +232,5 @@ main = do {
                     (Sphere (Vec3 1.0 0.0 (-1.0)) 0.5 (Metal (Vec3 0.8 0.6 0.2) 0.3)),
                     (Sphere (Vec3 (-1.0) 0.0 (-1.0)) 0.5 (Dialectric 1.5)),
                     (Sphere (Vec3 (-1.0) 0.0 (-1.0)) (-0.45) (Dialectric 1.5))];
-   putStrLn $ strImage $ genImage stdGen 400 200 world ;
+   putStrLn $ strImage $ genImage stdGen config world ;
 }
