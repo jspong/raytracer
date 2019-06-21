@@ -173,7 +173,7 @@ scatter g (Metal a f) r hr = let reflected = reflect (normalize $ direction r) (
                                  (u, g') = randomInUnitSphere g
                                  scattered = Ray (position hr) (add reflected (scale u f))
                                  d = dot reflected (normal hr)
-                             in (if d > 0 then Just (normal hr, scattered) else Nothing, g')
+                             in (if d > 0 then Just (a, scattered) else Nothing, g')
 scatter g (Dialectric i) r hr = let reflected = reflect (direction r) (normal hr)
                                     discriminant = dot (direction r) (normal hr)
                                     outward_normal = if discriminant > 0
@@ -217,7 +217,7 @@ rands g = let (g', g'') = split g in (g':rands g'')
 
 main = do {
    putStrLn "P3";
-   putStrLn "200 100";
+   putStrLn "400 200";
    putStrLn "255";
    stdGen <- getStdGen;
    world <- return [(Sphere (Vec3 0.0 0.0 (-1.0)) 0.5 (Lambertian $ Vec3 0.8 0.3 0.3)),
@@ -225,5 +225,5 @@ main = do {
                     (Sphere (Vec3 1.0 0.0 (-1.0)) 0.5 (Metal (Vec3 0.8 0.6 0.2) 0.3)),
                     (Sphere (Vec3 (-1.0) 0.0 (-1.0)) 0.5 (Dialectric 1.5)),
                     (Sphere (Vec3 (-1.0) 0.0 (-1.0)) (-0.45) (Dialectric 1.5))];
-   putStrLn $ strImage $ genImage stdGen 200 100 world ;
+   putStrLn $ strImage $ genImage stdGen 400 200 world ;
 }
