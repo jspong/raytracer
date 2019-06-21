@@ -65,7 +65,7 @@ randomInUnitSphere r = let range = (-1.0, 1.0)
 
 color_ :: Ray -> StdGen -> Vec3
 color_ r g = let world = [(Sphere (Vec3 0.0 0.0 (-1.0)) 0.5), (Sphere (Vec3 0.0 (-100.5) (-1.0)) 100.0)]
-            in (hitColor g (getClosestHit world r 0 10000000) r world)
+            in (hitColor g (getClosestHit world r 0.000001 10000000) r world)
 
 color :: Ray -> StdGen -> Vec3
 color r g = let v = color_ r g
@@ -137,8 +137,8 @@ coords g x nx ny = if x == nx
 
 genImage :: StdGen -> Integer -> Integer -> IO Image
 genImage r nx ny = return [
-                      [ average3 [color (getRay camera (((fromIntegral x) + (u - 0.5)) / fromIntegral nx) (((fromIntegral y) + (v-0.5)) / fromIntegral ny)) r'
-                                 | (u, v) <- take 10 (zip (randoms (fst $ split r') :: [Float]) (randoms (snd $ split r') :: [Float]))]]
+                      [ average3 [color (getRay camera (((fromIntegral x) + (u-0.5)) / fromIntegral nx) (((fromIntegral y) + (v-0.5)) / fromIntegral ny)) r'
+                                 | (u, v) <- take 10 (zip (randoms (snd $ split r') :: [Float]) (randoms (snd $ split (snd $ split r')) :: [Float]))]]
                       | (r', x, y) <- coords r 0 nx ny
                    ];
 
