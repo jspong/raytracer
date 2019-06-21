@@ -59,6 +59,10 @@ pointAt r t = add (origin r) (scale (direction r) t)
 
 -- Collision Physics
 
+data Hitable = Sphere { center :: Vec3 , radius :: Float , material :: Material}
+
+data HitRecord = HitRecord { time :: Float, position :: Vec3, normal :: Vec3 , material_ :: Material }
+
 randomInUnitSphere :: StdGen -> (Vec3, StdGen)
 randomInUnitSphere g = let range = (-1.0, 1.0)
                            (x, g') = randomR range g
@@ -66,10 +70,6 @@ randomInUnitSphere g = let range = (-1.0, 1.0)
                            (z, g''') = randomR range g''
                            v = Vec3 x y z
                        in if squared_length v < 1.0 then (v, g''') else randomInUnitSphere g'''
-
-data Hitable = Sphere { center :: Vec3 , radius :: Float }
-
-data HitRecord = HitRecord { time :: Float, position :: Vec3, normal :: Vec3 }
 
 hit :: Hitable -> Ray -> Float -> Float -> Maybe HitRecord
 hit s r tMin tMax = let oc = add (origin r) (negate3 (center s))
@@ -82,9 +82,9 @@ hit s r tMin tMax = let oc = add (origin r) (negate3 (center s))
                                 sol1 = (-b - tmp) / a
                                 sol2 = (-b + tmp) / a
                             in if sol1 < tMax && sol1 > tMin
-                               then Just (HitRecord sol1 (pointAt r sol1) (scale (add (pointAt r sol1) (negate3 (center s))) (1 / radius s)))
+                               then Just (HitRecord sol1 (pointAt r sol1) (scale (add (pointAt r sol1) (negate3 (center s))) (1 / radius s)) (material s))
                                else if sol2 < tMax && sol2 > tMin
-                                    then Just (HitRecord sol2 (pointAt r sol2) (scale (add (pointAt r sol2) (negate3 (center s))) (1 / radius s)))
+                                    then Just (HitRecord sol2 (pointAt r sol2) (scale (add (pointAt r sol2) (negate3 (center s))) (1 / radius s)) (material s))
                                     else Nothing
                        else Nothing
 
@@ -118,10 +118,10 @@ coords g x nx ny = if x == nx
 toCoord :: Integer -> Integer -> Float -> Float
 toCoord x nx u = ((fromIntegral x) + u) / (fromIntegral nx)
 
-genImage :: StdGen -> Integer -> Integer -> Image
-genImage g nx ny = [ let us = randoms (snd $ split g') :: [Float]
-                         vs = randoms (snd $ split (snd $ split g')) :: [Float]
-                     in average3 [ color (getRay camera (toCoord x nx u) (toCoord y ny v)) g' | (u, v) <- take 10 (zip us vs) ]
+genImage :: StdGen -> Integer -> Integer -> [Hitable] -> Image
+genImage g nx ny world = [ let us = randoms (snd $ split g') :: [Float]
+                               vs = randoms (snd $ split (snd $ split g')) :: [Float]
+                     in average3 [ color (getRay camera (toCoord x nx u) (toCoord y ny v)) g' world | (u, v) <- take 10 (zip us vs) ]
                    | (g', x, y) <- coords g 0 nx ny ];
 
 strVec3 :: Vec3 -> String
@@ -131,21 +131,44 @@ strImage :: Image -> String
 strImage [] = ""
 strImage (x:xs) = strVec3 x ++ "\n" ++ strImage xs
 
+-- Materials
+
+data Material = Lambertian { albedo :: Vec3 }
+              | Metal { albedo :: Vec3 }
+
+reflect :: Vec3 -> Vec3 -> Vec3
+reflect v n = add v (scale n (-2 * dot v n))
+
+scatter :: StdGen -> Material -> Ray -> HitRecord -> (Maybe (Vec3, Ray), StdGen)
+scatter g (Lambertian a) r hr = let (u, g') = randomInUnitSphere g
+                                    target = add (add (position hr) (normal hr)) u
+                                in (Just (a, (Ray (position hr) (add target (negate3 (position hr))))), g')
+scatter g (Metal a) r hr = let reflected = reflect (normalize $ direction r) (normal hr)
+                               scattered = Ray (position hr) reflected
+                               d = dot reflected (normal hr)
+                           in (if d > 0 then Just (normal hr, scattered) else Nothing, g)
+
 -- Rendering Colors
 
-hitColor :: StdGen -> (Maybe HitRecord) -> Ray -> [Hitable] -> Vec3
-hitColor _ Nothing r _ = lerp (Vec3 1.0 1.0 1.0) (Vec3 0.5 0.7 1.0) (0.5 * ((y (normalize (direction r))) + 1))
-hitColor g (Just rec) _ w = let (u, g') = randomInUnitSphere g
-                                target = add (add (position rec) (normal rec)) u
-                            in scale (color_ (Ray (position rec) (add target (negate3 (position rec)))) g') 0.5
+render :: StdGen -> Maybe (Vec3, Ray) -> [Hitable] -> Integer -> (Vec3, StdGen)
+render g Nothing _ _ = (Vec3 0.0 0.0 0.0, g)
+render g (Just (v, r)) world d = let (c, g') = color_ r g world (d-1)
+                                 in (multiply v c, g')
 
-color_ :: Ray -> StdGen -> Vec3
-color_ r g = let world = [(Sphere (Vec3 0.0 0.0 (-1.0)) 0.5), (Sphere (Vec3 0.0 (-100.5) (-1.0)) 100.0)]
-            in (hitColor g (getClosestHit world r 0.000001 10000000) r world)
+hitColor :: StdGen -> (Maybe HitRecord) -> Ray -> [Hitable] -> Integer -> (Vec3, StdGen)
+hitColor g _ _ _ 0 = (Vec3 0.0 0.0 0.0, g)
+hitColor g Nothing r _ _ = (lerp (Vec3 1.0 1.0 1.0) (Vec3 0.5 0.7 1.0) (0.5 * ((y (normalize (direction r))) + 1)), g)
+hitColor g (Just rec) r w d = let (u, g') = randomInUnitSphere g
+                                  target = add (add (position rec) (normal rec)) u
+                                  (scattered, g'') = scatter g' (material_ rec) r rec
+                              in render g'' scattered w d
 
-color :: Ray -> StdGen -> Vec3
-color r g = let v = color_ r g
-            in scale (Vec3 (sqrt $ x v) (sqrt $ y v) (sqrt $ z v)) 255.99
+color_ :: Ray -> StdGen -> [Hitable] -> Integer -> (Vec3, StdGen)
+color_ r g world d = hitColor g (getClosestHit world r 0.000001 1000000) r world d
+
+color :: Ray -> StdGen -> [Hitable] -> Vec3
+color r g world = let (v, _) = color_ r g world 50
+                    in scale (Vec3 (sqrt $ x v) (sqrt $ y v) (sqrt $ z v)) 255.99
 
 data Camera = Camera { lower_left :: Vec3, horizontal :: Vec3, vertical :: Vec3, imgOrigin :: Vec3 }
 camera = Camera (Vec3 (-2.0) (-1.0) (-1.0)) (Vec3 4.0 0.0 0.0) (Vec3 0.0 2.0 0.0) (Vec3 0.0 0.0 0.0)
@@ -161,5 +184,9 @@ main = do {
    putStrLn "200 100";
    putStrLn "255";
    stdGen <- getStdGen;
-   putStrLn $ strImage $ genImage stdGen 200 100;
+   world <- return [(Sphere (Vec3 0.0 0.0 (-1.0)) 0.5 (Lambertian $ Vec3 0.8 0.3 0.3)),
+                    (Sphere (Vec3 0.0 (-100.5) (-1.0)) 100.0 (Lambertian $ Vec3 0.8 0.8 0.0)),
+                    (Sphere (Vec3 1.0 0.0 (-1.0)) 0.5 (Metal $ Vec3 0.8 0.6 0.2)),
+                    (Sphere (Vec3 (-1.0) 0.0 (-1.0)) 0.5 (Metal $ Vec3 0.8 0.8 0.8))];
+   putStrLn $ strImage $ genImage stdGen 200 100 world ;
 }
