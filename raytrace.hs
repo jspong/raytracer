@@ -95,9 +95,9 @@ hit s r tMin tMax = let oc = add (origin r) (negate3 (center s))
                                 sol1 = (-b - tmp) / a
                                 sol2 = (-b + tmp) / a
                             in if sol1 < tMax && sol1 > tMin
-                               then Just (HitRecord sol1 (pointAt r sol1) (scale (add (pointAt r sol1) (center s)) (1 / radius s)))
+                               then Just (HitRecord sol1 (pointAt r sol1) (scale (add (pointAt r sol1) (negate3 (center s))) (1 / radius s)))
                                else if sol2 < tMax && sol2 > tMin
-                                    then Just (HitRecord sol2 (pointAt r sol2) (scale (add (pointAt r sol2) (center s)) (1 / radius s)))
+                                    then Just (HitRecord sol2 (pointAt r sol2) (scale (add (pointAt r sol2) (negate3 (center s))) (1 / radius s)))
                                     else Nothing
                        else Nothing
 
@@ -136,12 +136,11 @@ coords g x nx ny = if x == nx
                    else ((g, x, ny):coords (fst $ split g) (x+1) nx ny)
 
 genImage :: StdGen -> Integer -> Integer -> IO Image
-genImage r nx ny = let (r1, r2) = split r
-                 in return [
-                      [ average3 [color (getRay camera (((fromIntegral x) + u) / fromIntegral nx) (((fromIntegral y) + v) / fromIntegral ny)) r'
-                                 | (u, v) <- take 10 (zip (randoms r1 :: [Float]) (randoms r2 :: [Float]))]]
+genImage r nx ny = return [
+                      [ average3 [color (getRay camera (((fromIntegral x) + (u - 0.5)) / fromIntegral nx) (((fromIntegral y) + (v-0.5)) / fromIntegral ny)) r'
+                                 | (u, v) <- take 10 (zip (randoms (fst $ split r') :: [Float]) (randoms (snd $ split r') :: [Float]))]]
                       | (r', x, y) <- coords r 0 nx ny
-                    ];
+                   ];
 
 strVec3 :: Vec3 -> String
 strVec3 v = show (floor (x v)) ++ " " ++ show (floor (y v)) ++ " " ++ show (floor (z v))
