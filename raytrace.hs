@@ -35,8 +35,7 @@ squared_length v = (x v) * (x v) + (y v) * (y v) + (z v) * (z v)
 len = sqrt . squared_length
 
 normalize :: Vec3 -> Vec3
-normalize v = let l = len(v)
-              in Vec3 (x v / l) (y v / l) (z v / l)
+normalize v = scale v (1 / len v)
 
 lerp :: Vec3 -> Vec3 -> Float -> Vec3
 lerp x y t = add (scale x (1-t)) (scale y t)
@@ -130,7 +129,8 @@ strImage (x:xs) = strVec3 x ++ "\n" ++ strImage xs
 -- Materials
 
 data Material = Lambertian { albedo :: Vec3 }
-              | Metal { albedo :: Vec3 }
+              | Metal { albedo :: Vec3 , fuzz :: Float }
+              | Dialectric { ri :: Float }
 
 randomInUnitSphere :: StdGen -> (Vec3, StdGen)
 randomInUnitSphere g = let range = (-1.0, 1.0)
@@ -143,15 +143,47 @@ randomInUnitSphere g = let range = (-1.0, 1.0)
 reflect :: Vec3 -> Vec3 -> Vec3
 reflect v n = add v (scale n (-2 * dot v n))
 
+refract :: Vec3 -> Vec3 -> Float -> Maybe Vec3
+refract v n ni_over_nt = let uv = normalize v
+                             dt = dot uv n
+                             discriminant = 1.0 - ni_over_nt * ni_over_nt * (1 - dt * dt)
+                         in if discriminant > 0
+                            then let a = scale (add uv (scale n (-1.0 * dt))) ni_over_nt
+                                     b = scale n (-1.0 * sqrt discriminant)
+                                 in Just(add a b)
+                            else Nothing
+
+schlick :: Float -> Float -> Float
+schlick c i = let r0 = (1.0 - i) / (1.0 + i)
+                  r1 = r0 * r0
+              in r1 + (1.0 - r1) * ((1.0 - c) ** 5.0)
+
 scatter :: StdGen -> Material -> Ray -> HitRecord -> (Maybe (Vec3, Ray), StdGen)
 scatter g (Lambertian a) r hr = let (u, g') = randomInUnitSphere g
                                     target = add (add (position hr) (normal hr)) u
                                     scattered = Ray (position hr) (add target (negate3 (position hr)))
                                 in (Just (a, scattered), g')
-scatter g (Metal a) r hr = let reflected = reflect (normalize $ direction r) (normal hr)
-                               scattered = Ray (position hr) reflected
-                               d = dot reflected (normal hr)
-                           in (if d > 0 then Just (normal hr, scattered) else Nothing, g)
+scatter g (Metal a f) r hr = let reflected = reflect (normalize $ direction r) (normal hr)
+                                 (u, g') = randomInUnitSphere g
+                                 scattered = Ray (position hr) (add reflected (scale u f))
+                                 d = dot reflected (normal hr)
+                             in (if d > 0 then Just (normal hr, scattered) else Nothing, g')
+scatter g (Dialectric i) r hr = let reflected = reflect (direction r) (normal hr)
+                                    discriminant = dot (direction r) (normal hr)
+                                    outward_normal = if discriminant > 0
+                                                     then scale (normal hr) (-1.0)
+                                                     else normal hr
+                                    ni_over_nt = if discriminant > 0 then i else 1.0 / i
+                                    cosine = if discriminant > 0
+                                             then i * (dot (direction r) (normal hr)) / len (direction r)
+                                             else (-1.0) * (dot (direction r) (normal hr)) / len (direction r)
+                                    refracted = refract (direction r) outward_normal ni_over_nt
+                                in if isNothing refracted
+                                   then (Just (Vec3 1.0 1.0 1.0, Ray (position hr) reflected), g)
+                                   else let (reflect_, g') = random g
+                                        in if reflect_ < schlick cosine i
+                                           then (Just (Vec3 1.0 1.0 1.0, Ray (position hr) reflected), g')
+                                           else (Just (Vec3 1.0 1.0 1.0, Ray (position hr) (fromJust refracted)), g')
 
 -- Rendering Colors
 
@@ -189,7 +221,8 @@ main = do {
    stdGen <- getStdGen;
    world <- return [(Sphere (Vec3 0.0 0.0 (-1.0)) 0.5 (Lambertian $ Vec3 0.8 0.3 0.3)),
                     (Sphere (Vec3 0.0 (-100.5) (-1.0)) 100.0 (Lambertian $ Vec3 0.8 0.8 0.0)),
-                    (Sphere (Vec3 1.0 0.0 (-1.0)) 0.5 (Metal $ Vec3 0.8 0.6 0.2)),
-                    (Sphere (Vec3 (-1.0) 0.0 (-1.0)) 0.5 (Metal $ Vec3 0.8 0.8 0.8))];
+                    (Sphere (Vec3 1.0 0.0 (-1.0)) 0.5 (Metal (Vec3 0.8 0.6 0.2) 0.3)),
+                    (Sphere (Vec3 (-1.0) 0.0 (-1.0)) 0.5 (Dialectric 1.5)),
+                    (Sphere (Vec3 (-1.0) 0.0 (-1.0)) (-0.45) (Dialectric 1.5))];
    putStrLn $ strImage $ genImage stdGen 200 100 world ;
 }
