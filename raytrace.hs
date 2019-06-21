@@ -47,14 +47,30 @@ pointAt :: Ray -> Float -> Vec3
 pointAt r t = add (origin r) (scale (direction r) t)
 
 lerp :: Vec3 -> Vec3 -> Float -> Vec3
-lerp x y t = add (scale x t) (scale y (1-t))
+lerp x y t = add (scale x (1-t)) (scale y t)
 
-hitColor :: (Maybe HitRecord) -> Ray -> Vec3
-hitColor Nothing r = scale (lerp (Vec3 1.0 1.0 1.0) (Vec3 0.5 0.7 1.0) (0.5 * (y (normalize (direction r))))) 255.99
-hitColor (Just x) _ = scale (add (normal x) (Vec3 1.0 1.0 1.0)) (0.5 * 255.99)
+hitColor :: StdGen -> (Maybe HitRecord) -> Ray -> [Hitable] -> Vec3
+hitColor _ Nothing r _ = lerp (Vec3 1.0 1.0 1.0) (Vec3 0.5 0.7 1.0) (0.5 * ((y (normalize (direction r))) + 1))
+hitColor r (Just rec) _ w = let (u, r') = randomInUnitSphere r
+                                target = add (add (position rec) (normal rec)) u
+                            in scale (color_ (Ray (position rec) (add target (negate3 (position rec)))) r') 0.5
 
-color :: Ray -> Vec3
-color r = hitColor (getClosestHit [(Sphere (Vec3 0.0 0.0 (-1.0)) 0.5), (Sphere (Vec3 0.0 (-100.5) (-1.0)) 100.0)] r 0.0 10000.0) r
+randomInUnitSphere :: StdGen -> (Vec3, StdGen)
+randomInUnitSphere r = let range = (-1.0, 1.0)
+                           (x, r') = randomR range r
+                           (y, r'') = randomR range r'
+                           (z, r''') = randomR range r''
+                           v = Vec3 x y z
+                       in if squared_length v < 1.0 then (v, r''') else randomInUnitSphere r'''
+
+color_ :: Ray -> StdGen -> Vec3
+color_ r g = let world = [(Sphere (Vec3 0.0 0.0 (-1.0)) 0.5), (Sphere (Vec3 0.0 (-100.5) (-1.0)) 100.0)]
+            in (hitColor g (getClosestHit world r 0 10000000) r world)
+
+color :: Ray -> StdGen -> Vec3
+color r g = let v = color_ r g
+            in scale (Vec3 (sqrt $ x v) (sqrt $ y v) (sqrt $ z v)) 255.99
+
 
 average3_ :: [Vec3] -> Vec3 -> Int -> Vec3
 average3_ [] a n = scale a (1.0 / fromIntegral n)
@@ -109,12 +125,22 @@ camera = Camera (Vec3 (-2.0) (-1.0) (-1.0)) (Vec3 4.0 0.0 0.0) (Vec3 0.0 2.0 0.0
 getRay :: Camera -> Float -> Float -> Ray
 getRay c u v = Ray (imgOrigin c) (add (lower_left c) (add (scale (horizontal c) u) (add (scale (vertical c) v) (negate3 (imgOrigin c)))))
 
-genImage :: StdGen -> Integer -> Integer -> Image
+rands :: StdGen -> [StdGen]
+rands r = let (r', r'') = split r in (r':rands r'')
+
+coords :: StdGen -> Integer -> Integer -> Integer -> [(StdGen, Integer, Integer)]
+coords g x nx ny = if x == nx
+                   then if ny == 0
+                        then []
+                        else coords (fst $ split g) 0 nx (ny-1)
+                   else ((g, x, ny):coords (fst $ split g) (x+1) nx ny)
+
+genImage :: StdGen -> Integer -> Integer -> IO Image
 genImage r nx ny = let (r1, r2) = split r
-                 in [
-                      [ average3 [color (getRay camera (((fromIntegral x) + u) / fromIntegral nx) (((fromIntegral y) + v) / fromIntegral ny))
-                                 | (u, v) <- take 10 (zip (randoms r1 :: [Float]) (randoms r2 :: [Float]))]
-                      | x <- [0 .. nx-1]] | y <- [ny - yi + 1 | yi <- [1 .. ny]]
+                 in return [
+                      [ average3 [color (getRay camera (((fromIntegral x) + u) / fromIntegral nx) (((fromIntegral y) + v) / fromIntegral ny)) r'
+                                 | (u, v) <- take 10 (zip (randoms r1 :: [Float]) (randoms r2 :: [Float]))]]
+                      | (r', x, y) <- coords r 0 nx ny
                     ];
 
 strVec3 :: Vec3 -> String
@@ -128,9 +154,11 @@ strImage :: Image -> String
 strImage [] = ""
 strImage (r:rs) = strRow r ++ strImage rs
 
-main = do{
+main = do {
    putStrLn "P3";
    putStrLn "200 100";
    putStrLn "255";
-   putStrLn (strImage (genImage (mkStdGen 1000) 200 100));
+   stdGen <- getStdGen;
+   img <- genImage stdGen 200 100;
+   putStrLn $ strImage img
 }
