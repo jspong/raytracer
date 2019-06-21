@@ -108,7 +108,7 @@ getClosestHit (x:xs) r tMin tMax = let this = (hit x r tMin tMax)
 
 -- Image Generation
 
-data Config = Config { w :: Int, h :: Int, samples :: Int }
+data Config = Config { width :: Int, height :: Int, samples :: Int }
 
 coords :: StdGen -> Int -> Int -> Int -> [(StdGen, Int, Int)]
 coords g x nx ny = if x == nx
@@ -120,11 +120,11 @@ coords g x nx ny = if x == nx
 toCoord :: Int -> Int -> Float -> Float
 toCoord x nx u = ((fromIntegral x) + u) / (fromIntegral nx)
 
-genImage :: StdGen -> Config -> [Hitable] -> Image
-genImage g c world = [ let us = randoms (snd $ split g') :: [Float]
-                           vs = randoms (snd $ split (snd $ split g')) :: [Float]
-                       in average3 [ color (getRay camera (toCoord x (w c) u) (toCoord y (h c) v)) g' world | (u, v) <- take (samples c) (zip us vs) ]
-                     | (g', x, y) <- coords g 0 (w c) (h c)]
+genImage :: StdGen -> Config -> Camera -> [Hitable] -> Image
+genImage g c camera world = [ let us = randoms (snd $ split g') :: [Float]
+                                  vs = randoms (snd $ split (snd $ split g')) :: [Float]
+                              in average3 [ color (getRay camera (toCoord x (width c) u) (toCoord y (height c) v)) g' world | (u, v) <- take (samples c) (zip us vs) ]
+                     | (g', x, y) <- coords g 0 (width c) (height c)]
 
 strVec3 :: Vec3 -> String
 strVec3 v = show (floor (x v)) ++ " " ++ show (floor (y v)) ++ " " ++ show (floor (z v))
@@ -195,8 +195,33 @@ scatter g (Dialectric i) r hr = let reflected = reflect (direction r) (normal hr
 
 -- Camera
 
-data Camera = Camera { lower_left :: Vec3, horizontal :: Vec3, vertical :: Vec3, imgOrigin :: Vec3 }
-camera = Camera (Vec3 (-2.0) (-1.0) (-1.0)) (Vec3 4.0 0.0 0.0) (Vec3 0.0 2.0 0.0) (Vec3 0.0 0.0 0.0)
+data Camera = Camera { look_from :: Vec3 , look_at :: Vec3 , vup :: Vec3 , vfov :: Float, aspect :: Float }
+
+imgOrigin = look_from
+
+half_height :: Camera -> Float
+half_height c = let theta = (vfov c) * pi / 180 in tan (theta / 2)
+
+half_width :: Camera -> Float
+half_width c = (aspect c) * (half_height c)
+
+w :: Camera -> Vec3
+w c = normalize $ add (look_from c) (negate3 (look_at c))
+
+u :: Camera -> Vec3
+u c = normalize $ cross (vup c) (w c)
+
+v :: Camera -> Vec3
+v c = cross (w c) (u c)
+
+lower_left :: Camera -> Vec3
+lower_left c = add (imgOrigin c) (negate3 (add (scale (u c) (half_width c)) (add (scale (v c) (half_height c)) (w c))))
+
+horizontal :: Camera -> Vec3
+horizontal c = scale (u c) (2 * half_width c)
+
+vertical :: Camera -> Vec3
+vertical c = scale (v c) (2 * half_height c)
 
 getRay :: Camera -> Float -> Float -> Ray
 getRay c u v = Ray (imgOrigin c) (add (lower_left c) (add (scale (horizontal c) u) (add (scale (vertical c) v) (negate3 (imgOrigin c)))))
@@ -222,15 +247,20 @@ color r g world = let (v, _) = color_ r g world 50
                     in scale (Vec3 (sqrt $ x v) (sqrt $ y v) (sqrt $ z v)) 255.99
 
 main = do {
-   config <- return $ Config 100 50 3;
+   config <- return $ Config { width=2000 , height=1000 , samples=10 };
+   camera <- return $ Camera { look_from = (Vec3 (-2.0) 2.0 1.0),
+                               look_at = (Vec3 0.0 0.0 (-1.0)),
+                               vup = (Vec3 0.0 1.0 0.0),
+                               vfov = 45.0,
+                               aspect = ((fromIntegral (width config)) / (fromIntegral (height config))) };
    putStrLn "P3";
-   putStrLn ((show $ w config) ++ " " ++ (show $ h config));
+   putStrLn ((show $ width config) ++ " " ++ (show $ height config));
    putStrLn "255";
    stdGen <- getStdGen;
-   world <- return [(Sphere (Vec3 0.0 0.0 (-1.0)) 0.5 (Lambertian $ Vec3 0.8 0.3 0.3)),
+   world <- return [(Sphere (Vec3 0.0 0.0 (-1.0)) 0.5 (Lambertian $ Vec3 0.1 0.2 0.5)),
                     (Sphere (Vec3 0.0 (-100.5) (-1.0)) 100.0 (Lambertian $ Vec3 0.8 0.8 0.0)),
                     (Sphere (Vec3 1.0 0.0 (-1.0)) 0.5 (Metal (Vec3 0.8 0.6 0.2) 0.3)),
                     (Sphere (Vec3 (-1.0) 0.0 (-1.0)) 0.5 (Dialectric 1.5)),
                     (Sphere (Vec3 (-1.0) 0.0 (-1.0)) (-0.45) (Dialectric 1.5))];
-   putStrLn $ strImage $ genImage stdGen config world ;
+   putStrLn $ strImage $ genImage stdGen config camera world ;
 }
