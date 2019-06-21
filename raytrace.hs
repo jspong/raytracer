@@ -158,6 +158,12 @@ schlick c i = let r0 = (1.0 - i) / (1.0 + i)
                   r1 = r0 * r0
               in r1 + (1.0 - r1) * ((1.0 - c) ** 5.0)
 
+glass :: StdGen -> HitRecord -> (Maybe Vec3) -> Vec3 -> Float -> Float -> (Maybe (Vec3, Ray), StdGen)
+glass g hr Nothing reflected _ _ = (Just (Vec3 1.0 1.0 1.0, Ray (position hr) reflected), g)
+glass g hr (Just refracted) reflected cosine i = let (ref, g') = random g
+                                                     dir = if ref > schlick cosine i then reflected else refracted
+                                                 in (Just (Vec3 1.0 1.0 1.0, Ray (position hr) dir), g')
+
 scatter :: StdGen -> Material -> Ray -> HitRecord -> (Maybe (Vec3, Ray), StdGen)
 scatter g (Lambertian a) r hr = let (u, g') = randomInUnitSphere g
                                     target = add (add (position hr) (normal hr)) u
@@ -178,12 +184,7 @@ scatter g (Dialectric i) r hr = let reflected = reflect (direction r) (normal hr
                                              then i * (dot (direction r) (normal hr)) / len (direction r)
                                              else (-1.0) * (dot (direction r) (normal hr)) / len (direction r)
                                     refracted = refract (direction r) outward_normal ni_over_nt
-                                in if isNothing refracted
-                                   then (Just (Vec3 1.0 1.0 1.0, Ray (position hr) reflected), g)
-                                   else let (reflect_, g') = random g
-                                        in if reflect_ < schlick cosine i
-                                           then (Just (Vec3 1.0 1.0 1.0, Ray (position hr) reflected), g')
-                                           else (Just (Vec3 1.0 1.0 1.0, Ray (position hr) (fromJust refracted)), g')
+                                in glass g hr refracted reflected cosine i
 
 -- Rendering Colors
 
