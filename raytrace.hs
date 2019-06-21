@@ -161,7 +161,7 @@ schlick c i = let r0 = (1.0 - i) / (1.0 + i)
 glass :: StdGen -> HitRecord -> (Maybe Vec3) -> Vec3 -> Float -> Float -> (Maybe (Vec3, Ray), StdGen)
 glass g hr Nothing reflected _ _ = (Just (Vec3 1.0 1.0 1.0, Ray (position hr) reflected), g)
 glass g hr (Just refracted) reflected cosine i = let (ref, g') = random g
-                                                     dir = if ref > schlick cosine i then reflected else refracted
+                                                     dir = if ref < schlick cosine i then reflected else refracted
                                                  in (Just (Vec3 1.0 1.0 1.0, Ray (position hr) dir), g')
 
 scatter :: StdGen -> Material -> Ray -> HitRecord -> (Maybe (Vec3, Ray), StdGen)
