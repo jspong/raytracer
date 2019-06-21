@@ -2,8 +2,7 @@ import Data.Maybe
 import System.Random
 
 data Vec3 = Vec3 { x :: Float, y :: Float, z :: Float } deriving (Show)
-type Row = [Vec3]
-type Image = [Row]
+type Image = [Vec3]
 
 add :: Vec3 -> Vec3 -> Vec3
 add v1 v2 = Vec3 (x v1 + x v2) (y v1 + y v2) (z v1 + z v2)
@@ -36,9 +35,6 @@ len = sqrt . squared_length
 normalize :: Vec3 -> Vec3
 normalize v = let l = len(v)
               in Vec3 (x v / l) (y v / l) (z v / l)
-
-convert :: Integer -> Integer -> Float
-convert x nx = 255.99 * fromIntegral x / fromIntegral nx
 
 data Ray = Ray { origin :: Vec3
                , direction :: Vec3 } deriving (Show)
@@ -135,29 +131,26 @@ coords g x nx ny = if x == nx
                         else coords (fst $ split g) 0 nx (ny-1)
                    else ((g, x, ny):coords (fst $ split g) (x+1) nx ny)
 
-genImage :: StdGen -> Integer -> Integer -> IO Image
-genImage r nx ny = return [
-                      [ average3 [color (getRay camera (((fromIntegral x) + (u-0.5)) / fromIntegral nx) (((fromIntegral y) + (v-0.5)) / fromIntegral ny)) r'
-                                 | (u, v) <- take 10 (zip (randoms (snd $ split r') :: [Float]) (randoms (snd $ split (snd $ split r')) :: [Float]))]]
-                      | (r', x, y) <- coords r 0 nx ny
-                   ];
+toCoord :: Integer -> Integer -> Float -> Float
+toCoord x nx u = ((fromIntegral x) + u) / (fromIntegral nx)
+
+genImage :: StdGen -> Integer -> Integer -> Image
+genImage r nx ny = [ let us = randoms (snd $ split r') :: [Float]
+                         vs = randoms (snd $ split (snd $ split r')) :: [Float]
+                     in average3 [ color (getRay camera (toCoord x nx u) (toCoord y ny v)) r' | (u, v) <- take 10 (zip us vs) ]
+                   | (r', x, y) <- coords r 0 nx ny ];
 
 strVec3 :: Vec3 -> String
 strVec3 v = show (floor (x v)) ++ " " ++ show (floor (y v)) ++ " " ++ show (floor (z v))
 
-strRow :: Row -> String
-strRow [] = ""
-strRow (p:ps) = strVec3 p ++ "\n" ++ strRow ps
-
 strImage :: Image -> String
 strImage [] = ""
-strImage (r:rs) = strRow r ++ strImage rs
+strImage (r:rs) = strVec3 r ++ "\n" ++ strImage rs
 
 main = do {
    putStrLn "P3";
    putStrLn "200 100";
    putStrLn "255";
    stdGen <- getStdGen;
-   img <- genImage stdGen 200 100;
-   putStrLn $ strImage img
+   putStrLn $ strImage $ genImage stdGen 200 100;
 }
